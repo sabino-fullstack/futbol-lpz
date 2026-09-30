@@ -1,35 +1,36 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
+import { salir } from './auth'
+import Partidos from './Partidos'
+import PantallaAcceso from './PantallaAcceso'
 
 function App() {
-  const [partidos, setPartidos] = useState([])
-  const [error, setError] = useState(null)
+  const [sesion, setSesion] = useState(null)
+  const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
-    async function cargarPartidos() {
-      const { data, error } = await supabase
-        .from('partidos')
-        .select('*')
-        .order('fecha', { ascending: true })
-
-      if (error) setError(error.message)
-      else setPartidos(data)
-    }
-    cargarPartidos()
+    // Al abrir la app: ¿ya hay una sesión guardada?
+    supabase.auth.getSession().then(({ data }) => {
+      setSesion(data.session)
+      setCargando(false)
+    })
+    // Y se entera de cualquier cambio (entrar, salir)
+    const { data: suscripcion } = supabase.auth.onAuthStateChange(
+      (_evento, nuevaSesion) => setSesion(nuevaSesion)
+    )
+    return () => suscripcion.subscription.unsubscribe()
   }, [])
 
-  if (error) return <p>Error: {error}</p>
+  if (cargando) return <p>Cargando...</p>
+  if (!sesion) return <PantallaAcceso />
 
   return (
     <div>
-      <h1>Fútbol LPZ</h1>
-      {partidos.map((p) => (
-        <div key={p.id}>
-          <h2>{p.cancha}</h2>
-          <p>{p.fecha} · {p.hora}</p>
-          <p>Cuota: {p.cuota} Bs · Cupos: {p.cupos}</p>
-        </div>
-      ))}
+      <p>
+        Hola, {sesion.user.user_metadata.nombre}{' '}
+        <button onClick={salir}>Salir</button>
+      </p>
+      <Partidos />
     </div>
   )
 }
