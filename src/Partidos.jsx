@@ -1,37 +1,38 @@
-import { useEffect, useState } from 'react'
-import { supabase } from './supabaseClient'
+    import { useEffect, useState } from 'react'
+    import { supabase } from './supabaseClient'
 
-function Partidos() {
-  const [partidos, setPartidos] = useState([])
-  const [error, setError] = useState(null)
+    function Partidos() {
+    const [partidos, setPartidos] = useState([])
+    const [error, setError] = useState(null)
 
-  useEffect(() => {
-    async function cargarPartidos() {
-      const { data, error } = await supabase
-        .from('partidos')
-        .select('*')
-        .order('fecha', { ascending: true })
+    useEffect(() => {
+        async function cargarPartidos() {
+        const { data, error } = await supabase
+            .from('partidos')
+            .select('*')
+            .neq('estado', 'cancelado')
+            .order('fecha', { ascending: true })
 
-      if (error) setError(error.message)
-      else setPartidos(data)
-    }
-    cargarPartidos()
-  }, [])
+        if (error) setError(error.message)
+        else setPartidos(data)
+        }
+        cargarPartidos()
+    }, [])
 
-  if (error) return <p>Error: {error}</p>
+    if (error) return <p>Error: {error}</p>
 
-  return (
-    <div>
-      <h1>Fútbol LPZ</h1>
-      {partidos.map((p) => (
-        <div key={p.id}>
-          <h2>{p.cancha}</h2>
-          <p>{p.fecha} · {p.hora}</p>
-          <p>Cuota: {p.cuota} Bs · Cupos: {p.cupos}</p>
+    return (
+        <div>
+        <h1>Fútbol LPZ</h1>
+        {partidos.map((p) => (
+            <div key={p.id}>
+            <h2>{p.cancha}</h2>
+            <p>{p.fecha} · {p.hora}</p>
+            <p>Cuota: {p.cuota} Bs · Cupos: {p.cupos}</p>
+            </div>
+        ))}
         </div>
-      ))}
-    </div>
-  )
-}
+    )
+    }
 
-export default Partidos
+    export default Partidos
