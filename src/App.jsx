@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import { salir } from './auth'
 import Partidos from './Partidos'
+import MisReservas from './MisReservas'
 import Admin from './Admin'
 import MisPartidos from './MisPartidos'
 import PantallaAcceso from './PantallaAcceso'
@@ -42,7 +43,11 @@ function App() {
   if (!sesion) return <PantallaAcceso />
 
   const esSuperadmin = perfil?.rol === 'superadmin'
-  const hayMenu = esSuperadmin || esEncargado
+  // Si por alguna razón la vista no está permitida, se vuelve a Partidos
+  const permitida =
+    vista === 'partidos' || vista === 'reservas' ||
+    (vista === 'mis' && esEncargado) || (vista === 'admin' && esSuperadmin)
+  const actual = permitida ? vista : 'partidos'
 
   return (
     <div>
@@ -51,21 +56,23 @@ function App() {
         <button onClick={salir}>Salir</button>
       </p>
 
-      {hayMenu && (
-        <nav>
-          <button onClick={() => setVista('partidos')}>Partidos</button>
-          {esEncargado && (
-            <button onClick={() => setVista('mis')}>Mis partidos a cargo</button>
-          )}
-          {esSuperadmin && (
-            <button onClick={() => setVista('admin')}>Administración</button>
-          )}
-        </nav>
-      )}
+      <nav>
+        <button onClick={() => setVista('partidos')}>Partidos</button>
+        <button onClick={() => setVista('reservas')}>Mis reservas</button>
+        {esEncargado && (
+          <button onClick={() => setVista('mis')}>Mis partidos a cargo</button>
+        )}
+        {esSuperadmin && (
+          <button onClick={() => setVista('admin')}>Administración</button>
+        )}
+      </nav>
 
-      {vista === 'admin' && esSuperadmin && <Admin />}
-      {vista === 'mis' && esEncargado && <MisPartidos perfilId={usuarioId} />}
-      {(vista === 'partidos' || (vista === 'admin' && !esSuperadmin) || (vista === 'mis' && !esEncargado)) && <Partidos />}
+      {actual === 'partidos' && <Partidos perfil={perfil} />}
+      {actual === 'reservas' && (
+        <MisReservas perfilId={usuarioId} nombreJugador={perfil?.nombre ?? ''} />
+      )}
+      {actual === 'mis' && <MisPartidos perfilId={usuarioId} />}
+      {actual === 'admin' && <Admin />}
     </div>
   )
 }
