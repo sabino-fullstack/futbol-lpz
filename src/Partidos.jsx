@@ -70,7 +70,7 @@ export default function Partidos({ perfil }) {
             <p>{p.fecha} · {p.hora.slice(0, 5)}</p>
             <p>Cuota: {p.cuota} Bs · Cupos disponibles: {libres} de {p.cupos}</p>
             {libres > 0 && p.estado === 'abierto'
-              ? <button onClick={() => setReservando(p)}>Reservar cupo</button>
+              ? <button onClick={() => setReservando({ ...p, libres })}>Reservar cupo</button>
               : <p>Partido lleno</p>}
           </div>
         )

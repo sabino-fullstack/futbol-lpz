@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
+import PanelPartido from './PanelPartido'
 
 export default function MisPartidos({ perfilId }) {
   const [asignaciones, setAsignaciones] = useState([])
   const [error, setError] = useState(null)
   const [subiendo, setSubiendo] = useState(null) // id de la asignación en curso
+  const [gestionando, setGestionando] = useState(null)
 
   async function cargar() {
     const { data, error } = await supabase
       .from('encargados')
-      .select('id, qr_url, cuota_bonificada, partidos(cancha, fecha, hora, cuota, estado)')
+      .select('id, partido_id, qr_url, cuota_bonificada, partidos(cancha, fecha, hora, cuota, estado)')
       .eq('perfil_id', perfilId)
     if (error) return setError(error.message)
     setAsignaciones(data.filter((a) => a.partidos?.estado !== 'cancelado'))
@@ -57,7 +59,15 @@ if (asignacion.qr_url?.includes('/qrs/')) {
     setSubiendo(null)
     cargar()
   }
-
+if (gestionando) {
+  return (
+    <PanelPartido
+      partidoId={gestionando}
+      perfilId={perfilId}
+      onVolver={() => setGestionando(null)}
+    />
+  )
+}
   return (
     <div>
       <h2>Mis partidos a cargo</h2>
@@ -84,8 +94,12 @@ if (asignacion.qr_url?.includes('/qrs/')) {
               onChange={(e) => subirQR(a, e.target.files[0])}
             />
           </label>
+          <button onClick={() => setGestionando(a.partido_id)}>Gestionar lista</button>
           {subiendo === a.id && <p>Subiendo...</p>}
+          
         </div>
+        
+        
       ))}
     </div>
   )

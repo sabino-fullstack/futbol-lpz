@@ -72,7 +72,7 @@ function App() {
         <MisReservas perfilId={usuarioId} nombreJugador={perfil?.nombre ?? ''} />
       )}
       {actual === 'mis' && <MisPartidos perfilId={usuarioId} />}
-      {actual === 'admin' && <Admin />}
+      {actual === 'admin' && <Admin perfilId={usuarioId} />}
     </div>
   )
 }

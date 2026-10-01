@@ -1,29 +1,48 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
+import Contador from './Contador'
 
 export default function ReservarForm({ partido, onListo, onCancelar }) {
-  const [incluirme, setIncluirme] = useState(true)
-  const [invitados, setInvitados] = useState([])
+  const [yaTengo, setYaTengo] = useState(null) // null = consultando
+  const [cantidad, setCantidad] = useState(1)
+  const [nombres, setNombres] = useState([])
   const [error, setError] = useState(null)
   const [enviando, setEnviando] = useState(false)
 
-  const total = (incluirme ? 1 : 0) + invitados.length
+  useEffect(() => {
+    supabase.rpc('tengo_cupo', { p_partido: partido.id }).then(({ data, error }) => {
+      if (error) return setError(error.message)
+      setYaTengo(data)
+    })
+  }, [])
 
-  function cambiarInvitado(i, texto) {
-    setInvitados(invitados.map((n, j) => (j === i ? texto : n)))
+  if (yaTengo === null) {
+    return error
+      ? <div><p>{error}</p><button onClick={onCancelar}>Volver</button></div>
+      : <p>Cargando...</p>
+  }
+
+  const max = Math.min(5, partido.libres)
+  // Con cupo propio, todos los nombres son de acompañantes; si no, uno de los cupos es el mío
+  const faltanNombres = yaTengo ? cantidad : cantidad - 1
+
+  function cambiarNombre(i, texto) {
+    const copia = [...nombres]
+    copia[i] = texto
+    setNombres(copia)
   }
 
   async function reservar() {
     setError(null)
-    if (total < 1) return setError('Reserva al menos un cupo')
-    if (invitados.some((n) => n.trim() === '')) {
-      return setError('Escribe el nombre de cada acompañante (o quítalo)')
+    const lista = Array.from({ length: faltanNombres }, (_, i) => (nombres[i] ?? '').trim())
+    if (lista.some((n) => n === '')) {
+      return setError('Escribe el nombre de cada acompañante')
     }
     setEnviando(true)
     const { data, error } = await supabase.rpc('reservar_cupo', {
       p_partido: partido.id,
-      p_incluirme: incluirme,
-      p_invitados: invitados,
+      p_incluirme: !yaTengo,
+      p_invitados: lista,
     })
     setEnviando(false)
     if (error) return setError(error.message)
@@ -32,34 +51,32 @@ export default function ReservarForm({ partido, onListo, onCancelar }) {
 
   return (
     <div>
-      <h3>Reservar: {partido.cancha}</h3>
+      <h3>{yaTengo ? 'Agregar acompañantes' : 'Reservar'}: {partido.cancha}</h3>
+      {yaTengo && <p>Ya tienes un cupo en este partido. Aquí puedes sumar a otras personas.</p>}
 
-      <label>
-        <input type="checkbox" checked={incluirme}
-          onChange={(e) => setIncluirme(e.target.checked)} />{' '}
-        Me incluyo yo
-      </label>
+      <Contador
+        etiqueta={yaTengo ? 'Acompañantes:' : 'Cupos:'}
+        valor={cantidad}
+        min={1}
+        max={Math.max(1, max)}
+        onCambio={setCantidad}
+      />
 
-      <p>Acompañantes:</p>
-      {invitados.map((nombre, i) => (
+      {!yaTengo && <p>Tu cupo ya está incluido.</p>}
+      {Array.from({ length: faltanNombres }, (_, i) => (
         <div key={i}>
-          <input placeholder="Nombre del acompañante" value={nombre}
-            onChange={(e) => cambiarInvitado(i, e.target.value)} />
-          <button onClick={() => setInvitados(invitados.filter((_, j) => j !== i))}>
-            Quitar
-          </button>
+          <input
+            placeholder={`Nombre del acompañante ${i + 1}`}
+            value={nombres[i] ?? ''}
+            onChange={(e) => cambiarNombre(i, e.target.value)}
+          />
         </div>
       ))}
-      {total < 5 && (
-        <button onClick={() => setInvitados([...invitados, ''])}>
-          + Agregar acompañante
-        </button>
-      )}
 
-      <p>Total: {total} cupo(s) · {total * partido.cuota} Bs</p>
+      <p>Total: {cantidad * partido.cuota} Bs</p>
       {error && <p>{error}</p>}
 
-      <button onClick={reservar} disabled={enviando}>
+      <button onClick={reservar} disabled={enviando || max < 1}>
         {enviando ? 'Reservando...' : 'Reservar'}
       </button>
       <button onClick={onCancelar}>Cancelar</button>

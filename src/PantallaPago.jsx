@@ -98,6 +98,9 @@ export default function PantallaPago({ partido, grupoId, nombreJugador, onCerrar
             Paga con el QR de cualquiera de los encargados. Luego toca
             "Ya pagué" y, en WhatsApp, adjunta la captura de tu pago antes de enviar.
           </p>
+          <p>
+            Puedes cancelar hasta {partido.horas_cancelacion} horas antes del partido y
+            coordinar tu devolución. Después de ese plazo no hay devolución.</p>
 
           {encargados.length === 0 && <p>Este partido aún no tiene encargado.</p>}
 
