@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import Contador from './Contador'
-import { bs } from './formato'
+import { bs, nombreCompleto } from './formato'
+
 
 const ETIQUETA_DEVOLUCION = {
   pendiente: 'Devolución pendiente',
@@ -32,7 +33,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
     const [p, r, pg, lj, la, enc] = await Promise.all([
       supabase.from('partidos').select('*').eq('id', partidoId).single(),
       supabase.from('reservas')
-        .select('id, grupo_id, perfil_id, estado, vencimiento, nombre_invitado, posicion, precio, cancelada_en, cancelacion_tipo, monto_pagado, devolucion_estado, perfil:perfiles!perfil_id(nombre), creador:perfiles!creada_por(nombre, whatsapp)')
+        .select('id, grupo_id, perfil_id, estado, vencimiento, nombre_invitado, posicion, precio, cancelada_en, cancelacion_tipo, monto_pagado, devolucion_estado, perfil:perfiles!perfil_id(nombre, apellido, apodo), creador:perfiles!creada_por(id, nombre, apellido, apodo, whatsapp, nivel, rechazos_seguidos)')
         .eq('partido_id', partidoId)
         .order('created_at', { ascending: true }),
       supabase.from('pagos')
@@ -210,21 +211,51 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
           <p><strong>{describir(g)}</strong></p>
 
           {g.filas[0].creador ? (
-            <p>
-              Reservó: {g.filas[0].creador.nombre}{' '}
-              {g.filas[0].creador.whatsapp && (
-                <a href={`https://wa.me/${g.filas[0].creador.whatsapp}`} target="_blank" rel="noreferrer">
-                  WhatsApp
-                </a>
-              )}
-            </p>
-          ) : (
-            <p>Agregado por el encargado</p>
-          )}
+  <div className="space-y-1 text-sm">
+    <p>
+      Reservó: {nombreCompleto(g.filas[0].creador)}
+      <span className="text-suave">
+        {' · '}{g.filas[0].creador.nivel === 'confiable' ? 'Confiable' : 'Cuenta nueva'}
+      </span>
+      {g.filas[0].creador.rechazos_seguidos >= 2 && (
+        <strong className="text-rojo"> · ⚠️ {g.filas[0].creador.rechazos_seguidos} pagos rechazados</strong>
+      )}
+    </p>
+    {g.filas[0].creador.whatsapp && (
+      <a href={`https://wa.me/${g.filas[0].creador.whatsapp}`} target="_blank" rel="noreferrer">
+        WhatsApp
+      </a>
+    )}
+    <div className="flex flex-wrap gap-2">
+      {g.filas[0].creador.nivel === 'nuevo' && (
+        <button
+          disabled={trabajando}
+          onClick={() => ejecutar('aprobar_cuenta',
+            { p_perfil: g.filas[0].creador.id, p_confiable: true },
+            '¿Marcar esta cuenta como confiable? Tendrá límites más amplios.')}
+        >
+          Marcar como confiable
+        </button>
+      )}
+      {g.filas[0].creador.rechazos_seguidos >= 2 && (
+        <button
+          disabled={trabajando}
+          onClick={() => ejecutar('aprobar_cuenta',
+            { p_perfil: g.filas[0].creador.id, p_confiable: false },
+            '¿Permitir que esta cuenta vuelva a avisar pagos?')}
+        >
+          Permitir avisar pagos
+        </button>
+      )}
+    </div>
+  </div>
+) : (
+  <p>Agregado por el encargado</p>
+)}
 
           {g.filas.map((f) => (
             <div key={f.id}>
-              {f.nombre_invitado ?? f.perfil?.nombre ?? 'Jugador'}
+              {f.nombre_invitado || nombreCompleto(f.perfil) || 'Jugador'}
               {f.posicion === 'arquero' && <strong> 🧤 ARQUERO</strong>}
               {' · '}{bs(f.precio)} Bs{' '}
               <button disabled={trabajando} onClick={() => reasignar(f)}>Reasignar</button>{' '}
@@ -391,7 +422,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
       {canceladas.length === 0 && <p>No hay cancelaciones.</p>}
       {canceladas.map((r) => (
         <div key={r.id}>
-          {r.nombre_invitado ?? r.perfil?.nombre ?? 'Jugador'}
+          {r.nombre_invitado || nombreCompleto(r.perfil) || 'Jugador'}
           {r.posicion === 'arquero' && ' (arquero)'}
           {' · '}{r.cancelacion_tipo === 'tardia' ? 'cancelación tardía' : 'cancelación a tiempo'}
           {' · '}

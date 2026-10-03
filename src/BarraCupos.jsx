@@ -4,6 +4,7 @@ export default function BarraCupos({ titulo, libres, total }) {
   const pct = Math.min(100, Math.round((ocupados / total) * 100))
   const lleno = libres <= 0
   const urgente = !lleno && pct >= 75
+  const colorBarra = pct >= 75 ? 'bg-rojo' : pct >= 50 ? 'bg-amarillo' : 'bg-verde'
 
   const texto = lleno
     ? 'Completo'
@@ -28,7 +29,7 @@ export default function BarraCupos({ titulo, libres, total }) {
         className="h-3 w-full overflow-hidden rounded-full bg-borde"
       >
         <div
-          className={`h-full rounded-full transition-all duration-500 ${pct >= 75 ? 'bg-rojo' : 'bg-verde'}`}
+          className={`h-full rounded-full transition-all duration-500 ${colorBarra}`}
           style={{ width: `${pct}%` }}
         />
       </div>

@@ -13,16 +13,22 @@ export function normalizarNumero(texto) {
 
 const aCorreo = (numero) => `${numero}@${DOMINIO}`
 
-export async function registrar({ nombre, numero, contrasena }) {
+export async function registrar({ nombre, apellido, apodo, numero, contrasena }) {
   const n = normalizarNumero(numero)
-  if (!n) return { error: { message: 'Escribe un número de 8 dígitos' } }
+  if (!n) return { error: { message: 'Escribe tu número de 8 dígitos' } }
   return supabase.auth.signUp({
     email: aCorreo(n),
     password: contrasena,
-    options: { data: { nombre, whatsapp: n } },
+    options: {
+      data: {
+        nombre: nombre.trim(),
+        apellido: apellido.trim(),
+        apodo: apodo.trim(),
+        whatsapp: n,
+      },
+    },
   })
 }
-
 export async function entrar({ numero, contrasena }) {
   const n = normalizarNumero(numero)
   if (!n) return { error: { message: 'Escribe un número de 8 dígitos' } }

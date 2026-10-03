@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient'
 import Contador from './Contador'
 import { bs } from './formato'
 
-export default function ReservarForm({ partido, onListo, onCancelar }) {
+export default function ReservarForm({ partido, perfil, onListo, onCancelar }) {
   const [yaTengo, setYaTengo] = useState(null) // null = consultando
   const [cantidad, setCantidad] = useState(1)
   const [nombres, setNombres] = useState([])
@@ -11,6 +11,7 @@ export default function ReservarForm({ partido, onListo, onCancelar }) {
   const [arqueros, setArqueros] = useState([])
   const [error, setError] = useState(null)
   const [enviando, setEnviando] = useState(false)
+  
 
   useEffect(() => {
     supabase.rpc('tengo_cupo', { p_partido: partido.id }).then(({ data, error }) => {
@@ -18,6 +19,16 @@ export default function ReservarForm({ partido, onListo, onCancelar }) {
       setYaTengo(data)
     })
   }, [])
+  
+  const [limite, setLimite] = useState(null)
+
+useEffect(() => {
+  supabase.from('limites_cuenta')
+    .select('max_cupos, max_grupos')
+    .eq('nivel', perfil?.nivel ?? 'nuevo')
+    .single()
+    .then(({ data }) => setLimite(data))
+}, [])
 
   if (yaTengo === null) {
     return error
@@ -28,7 +39,7 @@ export default function ReservarForm({ partido, onListo, onCancelar }) {
   const hayArco = partido.cupos_arco > 0
   const libresJug = partido.libres
   const libresArq = hayArco ? partido.libresArco : 0
-  const max = Math.min(5, libresJug + libresArq)
+const max = Math.min(5, libresJug + libresArq, limite?.max_cupos ?? 5)
 
   // Con cupo propio, todos los nombres son de acompañantes; si no, uno de los cupos es el mío
   const faltanNombres = yaTengo ? cantidad : cantidad - 1
@@ -74,6 +85,12 @@ export default function ReservarForm({ partido, onListo, onCancelar }) {
   return (
     <div>
       <h3>{yaTengo ? 'Agregar acompañantes' : 'Reservar'}: {partido.cancha}</h3>
+      {perfil?.nivel === 'nuevo' && limite && (
+  <p className="rounded-xl border border-amarillo p-3 text-sm">
+    Tu cuenta es nueva: puedes tener hasta {limite.max_cupos} cupo(s) sin confirmar a la vez.
+    Cuando se confirme tu primer pago, el límite subira.
+  </p>
+)}
       {yaTengo && <p>Ya tienes un cupo en este partido. Aquí puedes sumar a otras personas.</p>}
 
       <Contador

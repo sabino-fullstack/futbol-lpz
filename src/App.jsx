@@ -7,6 +7,7 @@ import Admin from './Admin'
 import MisPartidos from './MisPartidos'
 import PantallaAcceso from './PantallaAcceso'
 import BotonTema from './BotonTema'
+import CuentaSuspendida from './CuentaSuspendida'
 
 function App() {
   const [sesion, setSesion] = useState(null)
@@ -42,6 +43,7 @@ function App() {
 
   if (cargando) return <p>Cargando...</p>
   if (!sesion) return <PantallaAcceso />
+  if (perfil && perfil.activo === false) return <CuentaSuspendida />
 
   const esSuperadmin = perfil?.rol === 'superadmin'
   // Si por alguna razón la vista no está permitida, se vuelve a Partidos

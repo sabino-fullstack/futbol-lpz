@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+
 :root {
   color-scheme: light;
   --fondo: #f5f6f3;
@@ -10,6 +11,7 @@
   --suave: #5b6670;
   --verde: #178a3d;
   --rojo: #c81e2b;
+    --amarillo: #d99a06;
 }
 .dark {
   color-scheme: dark;
@@ -20,6 +22,7 @@
   --suave: #9aa4ae;
   --verde: #22b04f;
   --rojo: #ef3340;
+    --amarillo: #f5b82e;
 }
 
 @theme inline {
@@ -30,6 +33,7 @@
   --color-suave: var(--suave);
   --color-verde: var(--verde);
   --color-rojo: var(--rojo);
+    --color-amarillo: var(--amarillo);
 }
 
 /* Tailwind quita el aspecto por defecto de botones e inputs.
