@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import ReservarForm from './ReservarForm'
 import PantallaPago from './PantallaPago'
-import { bs, rangoHora, textoEquipos } from './formato'
+import BarraCupos from './BarraCupos'
+import { bs, rangoHora, textoEquipos, fechaCorta } from './formato'
 
 export default function Partidos({ perfil }) {
   const [partidos, setPartidos] = useState([])
@@ -65,47 +66,67 @@ export default function Partidos({ perfil }) {
     )
   }
 
-  return (
-    <div>
-      <h2>Próximos partidos</h2>
-      {partidos.length === 0 && <p>No hay partidos disponibles por ahora.</p>}
-      {partidos.map((p) => {
-        const l = libres[p.id] ?? { jugador: 0, arquero: 0 }
-        const hayLugar = l.jugador > 0 || l.arquero > 0
-        return (
-          <div key={p.id}>
-            {p.canchas?.foto_url && (
-              <img
-                src={p.canchas.foto_url}
-                alt={`Cancha ${p.cancha}`}
-                loading="lazy"
-                style={{ width: '100%', maxWidth: 360, borderRadius: 8 }}
+ return (
+  <div className="space-y-4">
+    <h2 className="text-xl font-bold">Próximos partidos</h2>
+    {partidos.length === 0 && (
+      <p className="text-suave">No hay partidos disponibles por ahora.</p>
+    )}
+
+    {partidos.map((p) => {
+      const l = libres[p.id] ?? { jugador: 0, arquero: 0 }
+      const hayLugar = l.jugador > 0 || l.arquero > 0
+      return (
+        <article key={p.id} className="overflow-hidden rounded-2xl border border-borde bg-tarjeta shadow-sm">
+          {p.canchas?.foto_url && (
+            <img
+              src={p.canchas.foto_url}
+              alt={`Cancha ${p.cancha}`}
+              loading="lazy"
+              className="h-40 w-full object-cover"
+            />
+          )}
+          <div className="space-y-3 p-4">
+            <div>
+              <h3 className="text-lg font-bold">{p.cancha}</h3>
+              <p className="text-suave first-letter:uppercase">
+                {fechaCorta(p.fecha)} · {rangoHora(p)}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span className="font-bold text-verde">{bs(p.cuota)} Bs</span>
+              {textoEquipos(p) && <span className="text-suave">{textoEquipos(p)}</span>}
+              {p.canchas?.enlace_maps && (
+                <a href={p.canchas.enlace_maps} target="_blank" rel="noreferrer">📍 Cómo llegar</a>
+              )}
+            </div>
+
+            <BarraCupos titulo="Jugadores" libres={l.jugador} total={p.cupos} />
+            {p.cupos_arco > 0 && (
+              <BarraCupos
+                titulo={`Arqueros · ${bs(p.cuota_arquero)} Bs`}
+                libres={l.arquero}
+                total={p.cupos_arco}
               />
             )}
-            <h3>{p.cancha}</h3>
-            <p>{p.fecha} · {rangoHora(p)}</p>
-            {p.canchas?.enlace_maps && (
-              <p>
-                <a href={p.canchas.enlace_maps} target="_blank" rel="noreferrer">
-                  📍 Cómo llegar
-                </a>
+
+            {hayLugar && p.estado === 'abierto' ? (
+              <button
+                onClick={() => setReservando({ ...p, libres: l.jugador, libresArco: l.arquero })}
+                className="w-full rounded-xl border-0 bg-verde py-3 text-base font-bold text-white"
+              >
+                Reservar cupo
+              </button>
+            ) : (
+              <p className="rounded-xl bg-borde py-3 text-center font-semibold text-suave">
+                Partido lleno
               </p>
             )}
-            {textoEquipos(p) && <p>{textoEquipos(p)}</p>}
-            <p>Cuota: {bs(p.cuota)} Bs · Jugadores: {l.jugador} libres de {p.cupos}</p>
-            {p.cupos_arco > 0 && (
-              <p>
-                Arqueros: {l.arquero} libres de {p.cupos_arco} · Cuota arquero: {bs(p.cuota_arquero)} Bs
-              </p>
-            )}
-            {hayLugar && p.estado === 'abierto'
-              ? <button onClick={() => setReservando({ ...p, libres: l.jugador, libresArco: l.arquero })}>
-                  Reservar cupo
-                </button>
-              : <p>Partido lleno</p>}
           </div>
-        )
-      })}
-    </div>
-  )
+        </article>
+      )
+    })}
+  </div>
+)
 }

@@ -17,3 +17,7 @@ export function textoEquipos(p) {
   }
   return `${p.equipos} equipos`
 }
+export const fechaCorta = (fecha) =>
+  new Date(fecha + 'T00:00:00').toLocaleDateString('es-BO', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  })
