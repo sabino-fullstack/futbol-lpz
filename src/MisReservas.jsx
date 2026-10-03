@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import PantallaPago from './PantallaPago'
-import { bs } from './formato'
+import { bs, rangoHora } from './formato'
 // Bolivia no cambia de horario: siempre es UTC-4
 function inicioPartido(p) {
   return new Date(`${p.fecha}T${p.hora}-04:00`)
@@ -20,7 +20,7 @@ export default function MisReservas({ perfilId, nombreJugador }) {
   async function cargar() {
     const [r, p] = await Promise.all([
       supabase.from('reservas')
-        .select('id, grupo_id, estado, vencimiento, nombre_invitado, posicion, precio, partidos(id, cancha, fecha, hora, cuota, horas_cancelacion)')
+        .select('id, grupo_id, estado, vencimiento, nombre_invitado, posicion, precio, partidos(id, cancha, fecha, hora, hora_fin, cuota, horas_cancelacion, canchas(enlace_maps))')
         .eq('creada_por', perfilId)
         .neq('estado', 'cancelado')
         .order('created_at', { ascending: false }),
@@ -118,7 +118,14 @@ export default function MisReservas({ perfilId, nombreJugador }) {
         const yaEmpezo = inicioPartido(g.partido) <= new Date()
         return (
           <div key={g.grupoId}>
-            <h3>{g.partido.cancha} · {g.partido.fecha} · {g.partido.hora.slice(0, 5)}</h3>
+            <h3>{g.partido.cancha} · {g.partido.fecha} · {rangoHora(g.partido)}</h3>
+{g.partido.canchas?.enlace_maps && (
+  <p>
+    <a href={g.partido.canchas.enlace_maps} target="_blank" rel="noreferrer">
+      📍 Cómo llegar
+    </a>
+  </p>
+)}
             <p>{est.texto}</p>
 
             {g.filas.map((f) => (

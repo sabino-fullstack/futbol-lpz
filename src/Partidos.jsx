@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import ReservarForm from './ReservarForm'
 import PantallaPago from './PantallaPago'
-import { bs } from './formato'
+import { bs, rangoHora, textoEquipos } from './formato'
 
 export default function Partidos({ perfil }) {
   const [partidos, setPartidos] = useState([])
@@ -15,7 +15,7 @@ export default function Partidos({ perfil }) {
     const hoy = new Date().toLocaleDateString('en-CA')
     const { data, error } = await supabase
       .from('partidos')
-      .select('*')
+      .select('*, canchas(nombre, enlace_maps, foto_url)')
       .neq('estado', 'cancelado')
       .gte('fecha', hoy)
       .order('fecha', { ascending: true })
@@ -74,8 +74,24 @@ export default function Partidos({ perfil }) {
         const hayLugar = l.jugador > 0 || l.arquero > 0
         return (
           <div key={p.id}>
+            {p.canchas?.foto_url && (
+              <img
+                src={p.canchas.foto_url}
+                alt={`Cancha ${p.cancha}`}
+                loading="lazy"
+                style={{ width: '100%', maxWidth: 360, borderRadius: 8 }}
+              />
+            )}
             <h3>{p.cancha}</h3>
-            <p>{p.fecha} · {p.hora.slice(0, 5)}</p>
+            <p>{p.fecha} · {rangoHora(p)}</p>
+            {p.canchas?.enlace_maps && (
+              <p>
+                <a href={p.canchas.enlace_maps} target="_blank" rel="noreferrer">
+                  📍 Cómo llegar
+                </a>
+              </p>
+            )}
+            {textoEquipos(p) && <p>{textoEquipos(p)}</p>}
             <p>Cuota: {bs(p.cuota)} Bs · Jugadores: {l.jugador} libres de {p.cupos}</p>
             {p.cupos_arco > 0 && (
               <p>

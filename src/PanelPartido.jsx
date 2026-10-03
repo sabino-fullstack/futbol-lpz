@@ -13,7 +13,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   const [partido, setPartido] = useState(null)
   const [reservas, setReservas] = useState([])
   const [pagos, setPagos] = useState([])
-  const [ocupados, setOcupados] = useState(0)
+  const [libres, setLibres] = useState({ jugador: 0, arquero: 0 })
   const [miBonificado, setMiBonificado] = useState(false)
   const [error, setError] = useState(null)
   const [trabajando, setTrabajando] = useState(false)
@@ -21,30 +21,36 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   // Formulario "agregar jugadores"
   const [cantidad, setCantidad] = useState(1)
   const [nombres, setNombres] = useState([])
+  const [arqs, setArqs] = useState([])
   const [metodo, setMetodo] = useState('qr')
 
+  // Conversión de cupos de arco
+  const [aConvertir, setAConvertir] = useState(1)
+
   async function cargar() {
-    const [p, r, pg, oc, enc] = await Promise.all([
+    // Ojo: son 6 consultas y 6 variables, en el mismo orden
+    const [p, r, pg, lj, la, enc] = await Promise.all([
       supabase.from('partidos').select('*').eq('id', partidoId).single(),
       supabase.from('reservas')
-        .select('id, grupo_id, perfil_id, estado, vencimiento, nombre_invitado, cancelada_en, cancelacion_tipo, monto_pagado, devolucion_estado, perfil:perfiles!perfil_id(nombre), creador:perfiles!creada_por(nombre, whatsapp)')
+        .select('id, grupo_id, perfil_id, estado, vencimiento, nombre_invitado, posicion, precio, cancelada_en, cancelacion_tipo, monto_pagado, devolucion_estado, perfil:perfiles!perfil_id(nombre), creador:perfiles!creada_por(nombre, whatsapp)')
         .eq('partido_id', partidoId)
         .order('created_at', { ascending: true }),
       supabase.from('pagos')
         .select('grupo_id, metodo, estado, monto')
         .order('created_at', { ascending: true }),
-      supabase.rpc('cupos_ocupados', { p_partido: partidoId }),
+      supabase.rpc('cupos_libres', { p_partido: partidoId, p_posicion: 'jugador' }),
+      supabase.rpc('cupos_libres', { p_partido: partidoId, p_posicion: 'arquero' }),
       supabase.from('encargados')
         .select('cuota_bonificada')
         .eq('perfil_id', perfilId)
         .eq('partido_id', partidoId),
     ])
-    const fallo = p.error || r.error || pg.error || oc.error || enc.error
+    const fallo = p.error || r.error || pg.error || lj.error || la.error || enc.error
     if (fallo) return setError(fallo.message)
     setPartido(p.data)
     setReservas(r.data)
     setPagos(pg.data)
-    setOcupados(oc.data ?? 0)
+    setLibres({ jugador: lj.data ?? 0, arquero: la.data ?? 0 })
     setMiBonificado(enc.data.some((e) => e.cuota_bonificada))
   }
 
@@ -60,15 +66,6 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
     if (error) { setError(error.message); return false }
     await cargar()
     return true
-  }
-
-  async function agregar() {
-    const lista = Array.from({ length: cantidad }, (_, i) => (nombres[i] ?? '').trim())
-    if (lista.some((n) => n === '')) return setError('Escribe el nombre de cada jugador')
-    const ok = await ejecutar('agregar_jugadores', {
-      p_partido: partidoId, p_nombres: lista, p_metodo: metodo,
-    })
-    if (ok) { setCantidad(1); setNombres([]) }
   }
 
   function reasignar(fila) {
@@ -87,9 +84,10 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
     )
   }
 
+  const hayArco = partido.cupos_arco > 0
   const ahora = Date.now()
 
-  // El último pago de cada grupo es el que manda (si hubo un rechazo y luego otro aviso)
+  // El último pago de cada grupo es el que manda
   const pagoDe = {}
   pagos.forEach((x) => { pagoDe[x.grupo_id] = x })
 
@@ -105,31 +103,34 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   })
   const grupos = Object.values(gruposMapa)
 
-  // Contadores (sección 11 de tu documento)
-  const confirmados = activas.filter((r) => r.estado === 'confirmado').length
+  // Contadores: cada cupo cuenta una vez, con el detalle de arqueros
+  const confirmados = activas.filter((r) => r.estado === 'confirmado')
   const porVerificar = activas.filter(
     (r) => r.estado === 'reservado' && pagoDe[r.grupo_id]?.estado === 'por_verificar'
-  ).length
+  )
   const pendientes = activas.filter(
     (r) => r.estado === 'reservado'
       && pagoDe[r.grupo_id]?.estado !== 'por_verificar'
       && new Date(r.vencimiento).getTime() > ahora
-  ).length
-  const libres = partido.cupos - ocupados
+  )
+  const conArq = (lista) => {
+    const a = lista.filter((r) => r.posicion === 'arquero').length
+    return a > 0 ? `${lista.length} (${a} arq.)` : `${lista.length}`
+  }
 
   // Resumen de dinero
-const idsGrupos = new Set(reservas.map((r) => r.grupo_id))
-const cobrado = pagos
-  .filter((x) => idsGrupos.has(x.grupo_id) && x.estado === 'verificado' && x.metodo !== 'bonificado')
-  .reduce((s, x) => s + Number(x.monto), 0)
-const sumaDevolucion = (estado) => canceladas
-  .filter((r) => r.devolucion_estado === estado)
-  .reduce((s, r) => s + Number(r.monto_pagado), 0)
+  const idsGrupos = new Set(reservas.map((r) => r.grupo_id))
+  const cobrado = pagos
+    .filter((x) => idsGrupos.has(x.grupo_id) && x.estado === 'verificado' && x.metodo !== 'bonificado')
+    .reduce((s, x) => s + Number(x.monto), 0)
+  const sumaDevolucion = (estado) => canceladas
+    .filter((r) => r.devolucion_estado === estado)
+    .reduce((s, r) => s + Number(r.monto_pagado), 0)
+  const devHechas = sumaDevolucion('hecha')
+  const devPendientes = sumaDevolucion('pendiente')
+  const retenido = sumaDevolucion('no_corresponde')
+  const neto = cobrado - devHechas
 
-const devHechas = sumaDevolucion('hecha')
-const devPendientes = sumaDevolucion('pendiente')
-const retenido = sumaDevolucion('no_corresponde')
-const neto = cobrado - devHechas
   function describir(g) {
     const p = g.pago
     if (g.filas.some((f) => f.estado === 'confirmado')) {
@@ -146,12 +147,31 @@ const neto = cobrado - devHechas
       : `Venció, el cupo se liberó${rechazado}`
   }
 
-  // ¿Hay dinero de por medio? (misma regla que usa la base de datos)
   const hayDinero = (g) =>
     g.pago && g.pago.metodo !== 'bonificado'
     && ['por_verificar', 'verificado'].includes(g.pago.estado)
 
   const yaTengoCupo = activas.some((r) => r.perfil_id === perfilId && r.estado === 'confirmado')
+
+  // Formulario de agregar: cada nombre con su casilla de arquero
+  const marcas = Array.from({ length: cantidad }, (_, i) => hayArco && arqs[i] === true)
+  const nArq = marcas.filter(Boolean).length
+  const nJug = cantidad - nArq
+  const totalAgregar = nJug * partido.cuota + nArq * partido.cuota_arquero
+  const maxAgregar = Math.max(1, Math.min(10, libres.jugador + libres.arquero))
+
+  async function agregar() {
+    const lista = Array.from({ length: cantidad }, (_, i) => (nombres[i] ?? '').trim())
+    if (lista.some((n) => n === '')) return setError('Escribe el nombre de cada jugador')
+    if (nJug > libres.jugador) return setError(`Solo quedan ${libres.jugador} cupo(s) de jugador`)
+    if (nArq > libres.arquero) return setError(`Solo quedan ${libres.arquero} cupo(s) de arquero`)
+    const ok = await ejecutar('agregar_jugadores', {
+      p_partido: partidoId, p_nombres: lista, p_metodo: metodo, p_arqueros: marcas,
+    })
+    if (ok) { setCantidad(1); setNombres([]); setArqs([]) }
+  }
+
+  const convertir = Math.min(aConvertir, Math.max(1, libres.arquero))
 
   return (
     <div>
@@ -160,8 +180,14 @@ const neto = cobrado - devHechas
 
       <h2>{partido.cancha} · {partido.fecha} · {partido.hora.slice(0, 5)}</h2>
       <p>
-        {partido.cupos} cupos | {confirmados} confirmados | {porVerificar} por verificar
-        | {pendientes} pendientes | {libres} libres
+        Jugadores: {libres.jugador} libres de {partido.cupos} ({bs(partido.cuota)} Bs)
+        {hayArco && (
+          <> | Arqueros: {libres.arquero} libres de {partido.cupos_arco} ({bs(partido.cuota_arquero)} Bs)</>
+        )}
+      </p>
+      <p>
+        {conArq(confirmados)} confirmados | {conArq(porVerificar)} por verificar
+        | {conArq(pendientes)} pendientes
       </p>
 
       {error && <p>{error}</p>}
@@ -198,7 +224,9 @@ const neto = cobrado - devHechas
 
           {g.filas.map((f) => (
             <div key={f.id}>
-              {f.nombre_invitado ?? f.perfil?.nombre ?? 'Jugador'}{' '}
+              {f.nombre_invitado ?? f.perfil?.nombre ?? 'Jugador'}
+              {f.posicion === 'arquero' && <strong> 🧤 ARQUERO</strong>}
+              {' · '}{bs(f.precio)} Bs{' '}
               <button disabled={trabajando} onClick={() => reasignar(f)}>Reasignar</button>{' '}
               {hayDinero(g) ? (
                 <>
@@ -206,7 +234,7 @@ const neto = cobrado - devHechas
                     disabled={trabajando}
                     onClick={() => ejecutar('liberar_cupo',
                       { p_reserva: f.id, p_devolver: true },
-                      '¿Liberar este cupo y dejar la devolución pendiente?')}
+                      `¿Liberar este cupo y dejar pendiente la devolución de ${bs(f.precio)} Bs?`)}
                   >
                     Liberar y devolver
                   </button>{' '}
@@ -234,6 +262,7 @@ const neto = cobrado - devHechas
 
           {g.pago?.estado === 'por_verificar' && (
             <div>
+              <p>Monto a verificar: {bs(g.pago.monto)} Bs</p>
               <button
                 disabled={trabajando}
                 onClick={() => ejecutar('confirmar_pago', { p_grupo: g.grupoId })}
@@ -278,7 +307,7 @@ const neto = cobrado - devHechas
         etiqueta="Cantidad:"
         valor={cantidad}
         min={1}
-        max={Math.max(1, Math.min(10, libres))}
+        max={maxAgregar}
         onCambio={setCantidad}
       />
       {Array.from({ length: cantidad }, (_, i) => (
@@ -291,21 +320,80 @@ const neto = cobrado - devHechas
               copia[i] = e.target.value
               setNombres(copia)
             }}
-          />
+          />{' '}
+          {hayArco && (
+            <label>
+              <input
+                type="checkbox"
+                checked={arqs[i] === true}
+                onChange={(e) => {
+                  const copia = [...arqs]
+                  copia[i] = e.target.checked
+                  setArqs(copia)
+                }}
+              />{' '}
+              Arquero
+            </label>
+          )}
         </div>
       ))}
       <select value={metodo} onChange={(e) => setMetodo(e.target.value)}>
         <option value="qr">Ya pagó (por QR)</option>
         <option value="cancha">Pagará en cancha</option>
       </select>
-      <p>Total: {cantidad * partido.cuota} Bs</p>
-      <button disabled={trabajando || libres < 1} onClick={agregar}>Agregar</button>
+      <p>
+        Total: {bs(totalAgregar)} Bs
+        {nArq > 0 && ` (${nJug} jugador y ${nArq} arquero)`}
+      </p>
+      <button
+        disabled={trabajando || (libres.jugador + libres.arquero) < 1}
+        onClick={agregar}
+      >
+        Agregar
+      </button>
+
+      {hayArco && (
+        <div>
+          <h3>Cupos de arco</h3>
+          <p>{libres.arquero} libre(s) de {partido.cupos_arco}</p>
+          {libres.arquero > 0 ? (
+            <>
+              <p>
+                Si no hay arqueros suficientes, convierte los cupos de arco libres en
+                cupos de jugador. No se puede deshacer.
+              </p>
+              <Contador
+                etiqueta="Convertir:"
+                valor={convertir}
+                min={1}
+                max={libres.arquero}
+                onCambio={setAConvertir}
+              />
+              <button
+                disabled={trabajando}
+                onClick={async () => {
+                  const ok = await ejecutar('convertir_cupos_arco',
+                    { p_partido: partidoId, p_cantidad: convertir },
+                    `¿Convertir ${convertir} cupo(s) de arco libre(s) en cupos de jugador? No se puede deshacer.`)
+                  if (ok) setAConvertir(1)
+                }}
+              >
+                Convertir en cupos de jugador
+              </button>
+            </>
+          ) : (
+            <p>Todos los cupos de arco están ocupados.</p>
+          )}
+        </div>
+      )}
 
       <h3>Cancelaciones</h3>
       {canceladas.length === 0 && <p>No hay cancelaciones.</p>}
       {canceladas.map((r) => (
         <div key={r.id}>
-          {r.nombre_invitado ?? r.perfil?.nombre ?? 'Jugador'} · {r.cancelacion_tipo === 'tardia' ? 'cancelación tardía' : 'cancelación a tiempo'}
+          {r.nombre_invitado ?? r.perfil?.nombre ?? 'Jugador'}
+          {r.posicion === 'arquero' && ' (arquero)'}
+          {' · '}{r.cancelacion_tipo === 'tardia' ? 'cancelación tardía' : 'cancelación a tiempo'}
           {' · '}
           {r.devolucion_estado
             ? `${bs(r.monto_pagado)} Bs · ${ETIQUETA_DEVOLUCION[r.devolucion_estado]}`
@@ -323,12 +411,12 @@ const neto = cobrado - devHechas
       ))}
 
       <h3>Resumen de dinero</h3>
-<p>Cobrado (QR y cancha): {bs(cobrado)} Bs</p>
-<p>Devoluciones hechas: − {bs(devHechas)} Bs</p>
-<p><strong>Neto recibido: {bs(neto)} Bs</strong></p>
-<p>Devoluciones pendientes: {bs(devPendientes)} Bs (aún por devolver)</p>
-<p>Neto si se devuelve todo lo pendiente: {bs(neto - devPendientes)} Bs</p>
-<p>Retenido por cancelaciones tardías: {bs(retenido)} Bs (ya está dentro del neto)</p>
+      <p>Cobrado (QR y cancha): {bs(cobrado)} Bs</p>
+      <p>Devoluciones hechas: − {bs(devHechas)} Bs</p>
+      <p><strong>Neto recibido: {bs(neto)} Bs</strong></p>
+      <p>Devoluciones pendientes: {bs(devPendientes)} Bs (aún por devolver)</p>
+      <p>Neto si se devuelve todo lo pendiente: {bs(neto - devPendientes)} Bs</p>
+      <p>Retenido por cancelaciones tardías: {bs(retenido)} Bs (ya está dentro del neto)</p>
     </div>
   )
 }
