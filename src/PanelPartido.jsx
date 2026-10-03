@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import Contador from './Contador'
+import { bs } from './formato'
 
 const ETIQUETA_DEVOLUCION = {
   pendiente: 'Devolución pendiente',
@@ -117,14 +118,18 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   const libres = partido.cupos - ocupados
 
   // Resumen de dinero
-  const idsGrupos = new Set(reservas.map((r) => r.grupo_id))
-  const cobrado = pagos
-    .filter((x) => idsGrupos.has(x.grupo_id) && x.estado === 'verificado' && x.metodo !== 'bonificado')
-    .reduce((s, x) => s + Number(x.monto), 0)
-  const sumaDevolucion = (estado) => canceladas
-    .filter((r) => r.devolucion_estado === estado)
-    .reduce((s, r) => s + Number(r.monto_pagado), 0)
+const idsGrupos = new Set(reservas.map((r) => r.grupo_id))
+const cobrado = pagos
+  .filter((x) => idsGrupos.has(x.grupo_id) && x.estado === 'verificado' && x.metodo !== 'bonificado')
+  .reduce((s, x) => s + Number(x.monto), 0)
+const sumaDevolucion = (estado) => canceladas
+  .filter((r) => r.devolucion_estado === estado)
+  .reduce((s, r) => s + Number(r.monto_pagado), 0)
 
+const devHechas = sumaDevolucion('hecha')
+const devPendientes = sumaDevolucion('pendiente')
+const retenido = sumaDevolucion('no_corresponde')
+const neto = cobrado - devHechas
   function describir(g) {
     const p = g.pago
     if (g.filas.some((f) => f.estado === 'confirmado')) {
@@ -303,7 +308,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
           {r.nombre_invitado ?? r.perfil?.nombre ?? 'Jugador'} · {r.cancelacion_tipo === 'tardia' ? 'cancelación tardía' : 'cancelación a tiempo'}
           {' · '}
           {r.devolucion_estado
-            ? `${r.monto_pagado} Bs · ${ETIQUETA_DEVOLUCION[r.devolucion_estado]}`
+            ? `${bs(r.monto_pagado)} Bs · ${ETIQUETA_DEVOLUCION[r.devolucion_estado]}`
             : 'sin pago'}{' '}
           {['pendiente', 'no_corresponde'].includes(r.devolucion_estado) && (
             <button
@@ -318,10 +323,12 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
       ))}
 
       <h3>Resumen de dinero</h3>
-      <p>Cobrado (QR y cancha): {cobrado} Bs</p>
-      <p>Devoluciones pendientes: {sumaDevolucion('pendiente')} Bs</p>
-      <p>Devoluciones hechas: {sumaDevolucion('hecha')} Bs</p>
-      <p>Retenido por cancelaciones tardías: {sumaDevolucion('no_corresponde')} Bs (ya está dentro de lo cobrado)</p>
+<p>Cobrado (QR y cancha): {bs(cobrado)} Bs</p>
+<p>Devoluciones hechas: − {bs(devHechas)} Bs</p>
+<p><strong>Neto recibido: {bs(neto)} Bs</strong></p>
+<p>Devoluciones pendientes: {bs(devPendientes)} Bs (aún por devolver)</p>
+<p>Neto si se devuelve todo lo pendiente: {bs(neto - devPendientes)} Bs</p>
+<p>Retenido por cancelaciones tardías: {bs(retenido)} Bs (ya está dentro del neto)</p>
     </div>
   )
 }

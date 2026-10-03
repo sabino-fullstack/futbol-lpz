@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import PantallaPago from './PantallaPago'
-
+import { bs } from './formato'
 // Bolivia no cambia de horario: siempre es UTC-4
 function inicioPartido(p) {
   return new Date(`${p.fecha}T${p.hora}-04:00`)
@@ -20,7 +20,7 @@ export default function MisReservas({ perfilId, nombreJugador }) {
   async function cargar() {
     const [r, p] = await Promise.all([
       supabase.from('reservas')
-        .select('id, grupo_id, estado, vencimiento, nombre_invitado, partidos(id, cancha, fecha, hora, cuota, horas_cancelacion)')
+        .select('id, grupo_id, estado, vencimiento, nombre_invitado, posicion, precio, partidos(id, cancha, fecha, hora, cuota, horas_cancelacion)')
         .eq('creada_por', perfilId)
         .neq('estado', 'cancelado')
         .order('created_at', { ascending: false }),
@@ -70,7 +70,7 @@ export default function MisReservas({ perfilId, nombreJugador }) {
     } else if (pagado) {
       texto =
         `Tu cupo se liberará y el encargado coordinará contigo la devolución ` +
-        `de ${g.partido.cuota} Bs. ¿Cancelar?`
+        `de ${bs(fila.precio)} Bs. ¿Cancelar?`
     }
     if (!window.confirm(texto)) return
 
@@ -88,7 +88,7 @@ export default function MisReservas({ perfilId, nombreJugador }) {
     if (data.pagado && data.tardia) {
       setAviso('Cupo cancelado. Por haber cancelado fuera de plazo, no corresponde devolución.')
     } else if (data.pagado) {
-      setAviso(`Cupo cancelado. El encargado coordinará contigo la devolución de ${data.monto} Bs.`)
+      setAviso(`Cupo cancelado. El encargado coordinará contigo la devolución de ${bs(data.monto)} Bs`)
     } else {
       setAviso('Cupo cancelado.')
     }
@@ -123,7 +123,8 @@ export default function MisReservas({ perfilId, nombreJugador }) {
 
             {g.filas.map((f) => (
               <div key={f.id}>
-                {f.nombre_invitado ?? 'Yo'}{' '}
+                
+                {f.nombre_invitado ?? 'Yo'}{f.posicion === 'arquero' && ' (arquero)'}{' '}
                 {!yaEmpezo && (
                   <button onClick={() => cancelar(f, g)}>Cancelar este cupo</button>
                 )}

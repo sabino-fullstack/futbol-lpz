@@ -3,8 +3,9 @@ import { supabase } from './supabaseClient'
 import Contador from './Contador'
 import PanelPartido from './PanelPartido'
 import Interruptor from './Interruptor'
+import { bs } from './formato'
 
-const VACIO = { cancha: '', fecha: '', hora: '', cuota: '', cupos: 18 }
+const VACIO = { cancha: '', fecha: '', hora: '', cuota: '', cupos: 18, cupos_arco: 0, cuota_arquero: '' }
 
 function AsignarEncargado({ partidoId, perfiles, onAsignar }) {
   const [perfilId, setPerfilId] = useState('')
@@ -52,20 +53,41 @@ async function cargar() {
 
   const cambiar = (campo) => (e) => setNuevo({ ...nuevo, [campo]: e.target.value })
 
-  async function crearPartido() {
-    setError(null)
-    const { cancha, fecha, hora, cuota, cupos } = nuevo
-    if (!cancha || !fecha || !hora || !cuota || !cupos) {
-      return setError('Completa todos los campos')
-    }
-    const { error } = await supabase.from('partidos').insert({
-      cancha: cancha.trim(), fecha, hora,
-      cuota: Number(cuota), cupos: Number(cupos),
-    })
-    if (error) return setError(error.message)
-    setNuevo(VACIO)
-    cargar()
+async function crearPartido() {
+  setError(null)
+  const { cancha, fecha, hora, cuota, cupos } = nuevo
+  if (!cancha || !fecha || !hora || !cuota || !cupos) {
+    return setError('Completa todos los campos')
   }
+  const fila = {
+    cancha: cancha.trim(), fecha, hora,
+    cuota: Number(cuota),
+    cupos: Number(cupos),
+    cupos_arco: Number(nuevo.cupos_arco),
+  }
+  // Si se deja vacía, la base de datos pone la mitad de la cuota
+  if (nuevo.cuota_arquero !== '') fila.cuota_arquero = Number(nuevo.cuota_arquero)
+
+  const { error } = await supabase.from('partidos').insert(fila)
+  if (error) return setError(error.message)
+  setNuevo(VACIO)
+  cargar()
+}
+
+async function cambiarCuotaArquero(p) {
+  const texto = window.prompt(
+    `Nueva cuota de arquero (hoy ${bs(p.cuota_arquero)} Bs). Solo afecta reservas nuevas:`
+  )
+  if (texto === null) return
+  const valor = Number(texto)
+  if (texto.trim() === '' || Number.isNaN(valor) || valor < 0) {
+    return setError('Escribe un número válido')
+  }
+  const { error } = await supabase.from('partidos')
+    .update({ cuota_arquero: valor }).eq('id', p.id)
+  if (error) return setError(error.message)
+  cargar()
+}
 
   async function cancelarPartido(id) {
     if (!window.confirm('¿Cancelar este partido?')) return
@@ -130,12 +152,27 @@ if (gestionando) {
       <input type="time" value={nuevo.hora} onChange={cambiar('hora')} />
       <input type="number" placeholder="Cuota (Bs)" value={nuevo.cuota} onChange={cambiar('cuota')} />
       <Contador
-  etiqueta="Cupos:"
+  etiqueta="Cupos de jugador:"
   valor={nuevo.cupos}
   min={2}
   max={40}
   onCambio={(v) => setNuevo({ ...nuevo, cupos: v })}
 />
+<Contador
+  etiqueta="Cupos de arco:"
+  valor={nuevo.cupos_arco}
+  min={0}
+  max={6}
+  onCambio={(v) => setNuevo({ ...nuevo, cupos_arco: v })}
+/>
+{nuevo.cupos_arco > 0 && (
+  <input
+    type="number"
+    placeholder="Cuota arquero (vacío = la mitad)"
+    value={nuevo.cuota_arquero}
+    onChange={cambiar('cuota_arquero')}
+  />
+)}
       <button onClick={crearPartido}>Crear partido</button>
 
       <h3>Partidos</h3>
@@ -154,7 +191,15 @@ if (gestionando) {
             {p.cancha} · {p.fecha} · {p.hora.slice(0, 5)}
             {p.estado === 'cancelado' && ' (CANCELADO)'}
           </h4>
-          <p>{p.cuota} Bs · {p.cupos} cupos</p>
+          <p>
+  Jugadores: {p.cupos} a {bs(p.cuota)} Bs
+  {p.cupos_arco > 0
+    ? ` · Arqueros: ${p.cupos_arco} a ${bs(p.cuota_arquero)} Bs`
+    : ' · Sin cupos de arco'}
+</p>
+{p.cupos_arco > 0 && (
+  <button onClick={() => cambiarCuotaArquero(p)}>Cambiar cuota de arquero</button>
+)}
 
           <p>Encargados:</p>
           {encargados.filter((e) => e.partido_id === p.id).map((e) => (
