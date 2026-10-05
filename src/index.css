@@ -35,6 +35,18 @@
   --color-rojo: var(--rojo);
     --color-amarillo: var(--amarillo);
 }
+@layer components {
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
+    border-radius: .6rem; padding: .5rem .9rem; min-height: 2.5rem; text-decoration: none;
+  }
+  .btn-activo { background: var(--verde); color: #fff; border-color: transparent; }
+  .btn-primario {
+    background: var(--verde); color: #fff; border-color: transparent; font-weight: 700;
+    width: 100%; padding: .8rem 1rem; font-size: 1rem; border-radius: .75rem;
+  }
+}
 
 /* Tailwind quita el aspecto por defecto de botones e inputs.
    Estos estilos mantienen legibles las pantallas que aún no rediseñamos. */
@@ -51,4 +63,25 @@
     border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
     border-radius: .6rem; padding: .5rem .7rem; min-height: 2.5rem; max-width: 100%;
   }
+
+}
+@layer base {
+  html { font-size: 17px; }
+  button:not([role="switch"]),
+  input:not([type="checkbox"]):not([type="file"]),
+  select { min-height: 3rem; font-size: 1rem; }
+  input[type="checkbox"] { width: 1.4rem; height: 1.4rem; accent-color: var(--verde); }
+  :focus-visible { outline: 3px solid var(--verde); outline-offset: 2px; }
+}
+
+@layer components {
+  .btn { min-height: 3rem; }
+  .tarjeta {
+    border: 1px solid var(--borde); background: var(--tarjeta);
+    border-radius: 1rem; padding: 1rem;
+  }
+  .aviso { border: 1px solid var(--borde); border-radius: .75rem; padding: .75rem 1rem; }
+  .aviso-error { border-color: var(--rojo); color: var(--rojo); }
+  .aviso-ok { border-color: var(--verde); }
+  .aviso-alerta { border-color: var(--amarillo); }
 }

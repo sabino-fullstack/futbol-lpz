@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
+import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router'
 import { supabase } from './supabaseClient'
 import Contador from './Contador'
-import PanelPartido from './PanelPartido'
 import Interruptor from './Interruptor'
 import Canchas from './Canchas'
 import Cuentas from './Cuentas'
 import { bs, rangoHora, textoEquipos, finPartido } from './formato'
 
 const MODALIDADES = ['Fútbol 11', 'Fútbol 9', 'Fútbol 8', 'Fútbol 7', 'Fútbol 6', 'Fútbol 5', 'Futsal']
+const SECCIONES = [['partidos', 'Partidos'], ['canchas', 'Canchas'], ['cuentas', 'Cuentas']]
 
 const VACIO = {
   cancha_id: '', modalidad: 'Fútbol 11', modalidad_otra: '',
@@ -35,57 +36,60 @@ function AsignarEncargado({ partidoId, perfiles, onAsignar }) {
   )
 }
 
-export default function Admin({ perfilId }) {
+export default function Admin() {
+  const { seccion } = useParams()
+  const [params, setParams] = useSearchParams()
+  const ver = params.get('ver')
+  const filtro = ['proximos', 'pasados', 'cancelados'].includes(ver) ? ver : 'proximos'
+
   const [partidos, setPartidos] = useState([])
   const [encargados, setEncargados] = useState([])
   const [perfiles, setPerfiles] = useState([])
   const [canchas, setCanchas] = useState([])
   const [nuevo, setNuevo] = useState(VACIO)
   const [error, setError] = useState(null)
-  const [filtro, setFiltro] = useState('proximos') // 'proximos' | 'pasados' | 'cancelados'
-const [pasadosVisibles, setPasadosVisibles] = useState(10)
-const [pendientes, setPendientes] = useState({})
-  const [gestionando, setGestionando] = useState(null)
-  const [seccion, setSeccion] = useState('partidos') // 'partidos' | 'canchas' | 'cuentas'
+  const [pasadosVisibles, setPasadosVisibles] = useState(10)
+  const [pendientes, setPendientes] = useState({})
   const [creando, setCreando] = useState(false)
 
- async function cargar() {
-  const [p, e, pf, c, dev, cob] = await Promise.all([
-    supabase.from('partidos').select('*')
-      .order('fecha', { ascending: true }).order('hora', { ascending: true }),
-    supabase.from('encargados').select('id, partido_id, cuota_bonificada, perfiles(nombre, apellido, whatsapp)'),
-    supabase.from('perfiles').select('id, nombre, apellido, whatsapp').eq('activo', true).order('nombre'),
-    supabase.from('canchas').select('id, nombre, enlace_maps, foto_url').order('nombre'),
-    supabase.from('reservas').select('partido_id').eq('devolucion_estado', 'pendiente'),
-    supabase.from('pagos').select('grupo_id').eq('metodo', 'cancha').eq('estado', 'pendiente'),
-  ])
-  const fallo = p.error || e.error || pf.error || c.error || dev.error || cob.error
-  if (fallo) return setError(fallo.message)
+  async function cargar() {
+    // 6 consultas y 6 variables, en el mismo orden
+    const [p, e, pf, c, dev, cob] = await Promise.all([
+      supabase.from('partidos').select('*')
+        .order('fecha', { ascending: true }).order('hora', { ascending: true }),
+      supabase.from('encargados').select('id, partido_id, cuota_bonificada, perfiles(nombre, apellido, whatsapp)'),
+      supabase.from('perfiles').select('id, nombre, apellido, whatsapp').eq('activo', true).order('nombre'),
+      supabase.from('canchas').select('id, nombre, enlace_maps, foto_url').order('nombre'),
+      supabase.from('reservas').select('partido_id').eq('devolucion_estado', 'pendiente'),
+      supabase.from('pagos').select('grupo_id').eq('metodo', 'cancha').eq('estado', 'pendiente'),
+    ])
+    const fallo = p.error || e.error || pf.error || c.error || dev.error || cob.error
+    if (fallo) return setError(fallo.message)
 
-  // Cupos confirmados cuyo pago en cancha todavía no se cobró
-  const grupos = cob.data.map((x) => x.grupo_id)
-  let porCobrar = []
-  if (grupos.length > 0) {
-    const r = await supabase.from('reservas').select('partido_id')
-      .in('grupo_id', grupos).eq('estado', 'confirmado')
-    if (r.error) return setError(r.error.message)
-    porCobrar = r.data
+    // Cupos confirmados cuyo pago en cancha todavía no se cobró
+    const grupos = cob.data.map((x) => x.grupo_id)
+    let porCobrar = []
+    if (grupos.length > 0) {
+      const r = await supabase.from('reservas').select('partido_id')
+        .in('grupo_id', grupos).eq('estado', 'confirmado')
+      if (r.error) return setError(r.error.message)
+      porCobrar = r.data
+    }
+
+    const pend = {}
+    const sumar = (id, campo) => {
+      pend[id] = pend[id] ?? { cobros: 0, devoluciones: 0 }
+      pend[id][campo] += 1
+    }
+    dev.data.forEach((x) => sumar(x.partido_id, 'devoluciones'))
+    porCobrar.forEach((x) => sumar(x.partido_id, 'cobros'))
+
+    setPartidos(p.data)
+    setEncargados(e.data)
+    setPerfiles(pf.data)
+    setCanchas(c.data)
+    setPendientes(pend)
   }
-
-  const pend = {}
-  const sumar = (id, campo) => {
-    pend[id] = pend[id] ?? { cobros: 0, devoluciones: 0 }
-    pend[id][campo] += 1
-  }
-  dev.data.forEach((x) => sumar(x.partido_id, 'devoluciones'))
-  porCobrar.forEach((x) => sumar(x.partido_id, 'cobros'))
-
-  setPartidos(p.data)
-  setEncargados(e.data)
-  setPerfiles(pf.data)
-  setCanchas(c.data)
-  setPendientes(pend)
-}
 
   useEffect(() => { cargar() }, [])
 
@@ -186,32 +190,25 @@ const [pendientes, setPendientes] = useState({})
     cargar()
   }
 
-const ahora = Date.now()
-const cancelados = partidos.filter((p) => p.estado === 'cancelado')
-const vivos = partidos.filter((p) => p.estado !== 'cancelado')
-const proximos = vivos.filter((p) => finPartido(p).getTime() >= ahora)
-const pasados = vivos
-  .filter((p) => finPartido(p).getTime() < ahora)
-  .reverse() // los más recientes primero
-const hayPendientePasado = pasados.some((p) => pendientes[p.id])
+  // Todos los hooks están arriba; desde aquí solo hay cálculos
+  const ahora = Date.now()
+  const cancelados = partidos.filter((p) => p.estado === 'cancelado')
+  const vivos = partidos.filter((p) => p.estado !== 'cancelado')
+  const proximos = vivos.filter((p) => finPartido(p).getTime() >= ahora)
+  const pasados = vivos
+    .filter((p) => finPartido(p).getTime() < ahora)
+    .reverse() // los más recientes primero
+  const hayPendientePasado = pasados.some((p) => pendientes[p.id])
 
-const lista = filtro === 'proximos'
-  ? proximos
-  : filtro === 'pasados'
-    ? pasados.slice(0, pasadosVisibles)
-    : cancelados
+  const lista = filtro === 'proximos'
+    ? proximos
+    : filtro === 'pasados'
+      ? pasados.slice(0, pasadosVisibles)
+      : cancelados
 
-  if (gestionando) {
-    return (
-      <PanelPartido
-        partidoId={gestionando}
-        perfilId={perfilId}
-        onVolver={() => setGestionando(null)}
-      />
-    )
+  if (!SECCIONES.some(([id]) => id === seccion)) {
+    return <Navigate to="/admin/partidos" replace />
   }
-
-  const secciones = [['partidos', 'Partidos'], ['canchas', 'Canchas'], ['cuentas', 'Cuentas']]
 
   return (
     <div className="space-y-4">
@@ -219,14 +216,15 @@ const lista = filtro === 'proximos'
       {error && <p className="text-rojo">{error}</p>}
 
       <nav className="flex gap-2">
-        {secciones.map(([id, texto]) => (
-          <button
+        {SECCIONES.map(([id, texto]) => (
+          <NavLink
             key={id}
-            onClick={() => { setError(null); setSeccion(id) }}
-            className={seccion === id ? 'border-transparent bg-verde text-white' : ''}
+            to={`/admin/${id}`}
+            onClick={() => setError(null)}
+            className={({ isActive }) => `btn ${isActive ? 'btn-activo' : ''}`}
           >
             {texto}
-          </button>
+          </NavLink>
         ))}
       </nav>
 
@@ -313,18 +311,32 @@ const lista = filtro === 'proximos'
             </div>
           )}
 
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={verCancelados}
-              onChange={(e) => setVerCancelados(e.target.checked)}
-            />
-            Mostrar cancelados
-          </label>
+          <nav className="flex flex-wrap gap-2">
+            {[
+              ['proximos', `Próximos (${proximos.length})`],
+              ['pasados', `Pasados (${pasados.length})${hayPendientePasado ? ' ⚠️' : ''}`],
+              ['cancelados', `Cancelados (${cancelados.length})`],
+            ].map(([id, texto]) => (
+              <button
+                key={id}
+                onClick={() => setParams({ ver: id }, { replace: true })}
+                className={filtro === id ? 'border-transparent bg-verde text-white' : ''}
+              >
+                {texto}
+              </button>
+            ))}
+          </nav>
 
-          {visibles.length === 0 && <p className="text-suave">No hay partidos.</p>}
+          {filtro === 'pasados' && hayPendientePasado && (
+            <p className="rounded-xl border border-amarillo p-3 text-sm">
+              ⚠️ Hay partidos pasados con cobros en cancha o devoluciones sin resolver.
+              Ábrelos con "Gestionar lista".
+            </p>
+          )}
 
-          {visibles.map((p) => {
+          {lista.length === 0 && <p className="text-suave">No hay partidos en esta sección.</p>}
+
+          {lista.map((p) => {
             const delPartido = encargados.filter((e) => e.partido_id === p.id)
             return (
               <div key={p.id} className="space-y-2 rounded-xl border border-borde bg-tarjeta p-3">
@@ -339,9 +351,19 @@ const lista = filtro === 'proximos'
                     : ' · Sin cupos de arco'}
                   {textoEquipos(p) && ` · ${textoEquipos(p)}`}
                 </p>
+                {pendientes[p.id]?.cobros > 0 && (
+                  <p className="text-sm font-semibold text-amarillo">
+                    ⚠️ {pendientes[p.id].cobros} cupo(s) por cobrar en cancha
+                  </p>
+                )}
+                {pendientes[p.id]?.devoluciones > 0 && (
+                  <p className="text-sm font-semibold text-amarillo">
+                    ⚠️ {pendientes[p.id].devoluciones} devolución(es) pendiente(s)
+                  </p>
+                )}
 
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => setGestionando(p.id)}>Gestionar lista</button>
+                  <Link to={`/admin/partidos/${p.id}`} className="btn">Gestionar lista</Link>
                   {p.cupos_arco > 0 && (
                     <button onClick={() => cambiarCuotaArquero(p)}>Cuota de arquero</button>
                   )}
@@ -374,6 +396,10 @@ const lista = filtro === 'proximos'
               </div>
             )
           })}
+
+          {filtro === 'pasados' && pasados.length > pasadosVisibles && (
+            <button onClick={() => setPasadosVisibles(pasadosVisibles + 10)}>Mostrar 10 más</button>
+          )}
         </div>
       )}
 

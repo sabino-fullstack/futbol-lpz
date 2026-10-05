@@ -56,3 +56,26 @@ export const finPartido = (p) =>
   p.hora_fin
     ? new Date(`${p.fecha}T${p.hora_fin}-04:00`)
     : new Date(inicioPartido(p).getTime() + 3 * 3600 * 1000)  
+// "Chino" si tiene apodo; si no, "Carlos P."
+export const nombreCorto = (p) => {
+  if (!p) return ''
+  if (p.apodo) return p.apodo
+  return p.apellido ? `${p.nombre} ${p.apellido.charAt(0)}.` : p.nombre
+}
+
+// WhatsApp del encargado con un mensaje de consulta ya escrito
+export function enlaceConsulta(whatsapp, partido) {
+  const mensaje =
+    `Hola, tengo una consulta sobre el partido en ${partido.cancha}, ` +
+    `${fechaCorta(partido.fecha)} a las ${hhmm(partido.hora)}.`
+  return `https://wa.me/${String(whatsapp).replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`
+}
+
+// Compartir el partido por WhatsApp (el enlace lleva directo a su detalle)
+export function enlaceCompartir(partido) {
+  const url = `${window.location.origin}/partidos/${partido.id}`
+  const mensaje =
+    `⚽ ${partido.cancha}, ${fechaCorta(partido.fecha)} a las ${hhmm(partido.hora)}. ` +
+    `Mira los cupos y reserva aquí 👇\n${url}`
+  return `https://wa.me/?text=${encodeURIComponent(mensaje)}`
+}

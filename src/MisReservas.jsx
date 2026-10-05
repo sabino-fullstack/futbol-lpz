@@ -1,21 +1,18 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { supabase } from './supabaseClient'
-import PantallaPago from './PantallaPago'
-import { bs, rangoHora } from './formato'
-// Bolivia no cambia de horario: siempre es UTC-4
-function inicioPartido(p) {
-  return new Date(`${p.fecha}T${p.hora}-04:00`)
-}
+import { bs, rangoHora, inicioPartido, finPartido, fechaCorta } from './formato'
+
 function esTardia(p) {
   const limite = inicioPartido(p).getTime() - p.horas_cancelacion * 3600 * 1000
   return Date.now() > limite
 }
 
-export default function MisReservas({ perfilId, nombreJugador }) {
+export default function MisReservas({ perfilId }) {
   const [grupos, setGrupos] = useState([])
+  const [cargado, setCargado] = useState(false)
   const [error, setError] = useState(null)
   const [aviso, setAviso] = useState(null)
-  const [verPago, setVerPago] = useState(null)
 
   async function cargar() {
     const [r, p] = await Promise.all([
@@ -42,17 +39,18 @@ export default function MisReservas({ perfilId, nombreJugador }) {
     p.data.forEach((x) => { pagos[x.grupo_id] = x })
 
     setGrupos(Object.values(porGrupo).map((g) => ({ ...g, pago: pagos[g.grupoId] })))
+    setCargado(true)
   }
 
   useEffect(() => { cargar() }, [])
 
   function estadoDe(g) {
-    if (g.pago?.estado === 'verificado') return { texto: '✅ Cupo confirmado', puedePagar: false }
-    if (g.pago?.estado === 'por_verificar') return { texto: '⏳ Pago por verificar', puedePagar: true }
+    if (g.pago?.estado === 'verificado') return { texto: '✅ Cupo confirmado', clase: 'text-verde', puedePagar: false }
+    if (g.pago?.estado === 'por_verificar') return { texto: '⏳ Pago por verificar', clase: 'text-amarillo', puedePagar: true }
     const vigente = new Date(g.filas[0].vencimiento) > new Date()
     return vigente
-      ? { texto: 'Reservado, falta pagar', puedePagar: true }
-      : { texto: 'Venció (el cupo se liberó)', puedePagar: false }
+      ? { texto: 'Reservado, falta pagar', clase: 'text-amarillo', puedePagar: true }
+      : { texto: 'Venció (el cupo se liberó)', clase: 'text-suave', puedePagar: false }
   }
 
   async function cancelar(fila, g) {
@@ -88,62 +86,80 @@ export default function MisReservas({ perfilId, nombreJugador }) {
     if (data.pagado && data.tardia) {
       setAviso('Cupo cancelado. Por haber cancelado fuera de plazo, no corresponde devolución.')
     } else if (data.pagado) {
-      setAviso(`Cupo cancelado. El encargado coordinará contigo la devolución de ${bs(data.monto)} Bs`)
+      setAviso(`Cupo cancelado. El encargado coordinará contigo la devolución de ${bs(data.monto)} Bs.`)
     } else {
       setAviso('Cupo cancelado.')
     }
     cargar()
   }
 
-  if (verPago) {
+  if (!cargado && !error) return <p className="text-suave">Cargando...</p>
+
+  const ahora = Date.now()
+  const proximas = grupos
+    .filter((g) => finPartido(g.partido).getTime() >= ahora)
+    .sort((a, b) => inicioPartido(a.partido) - inicioPartido(b.partido))
+  const pasadas = grupos
+    .filter((g) => finPartido(g.partido).getTime() < ahora)
+    .sort((a, b) => inicioPartido(b.partido) - inicioPartido(a.partido))
+
+  function tarjeta(g) {
+    const est = estadoDe(g)
+    const yaEmpezo = inicioPartido(g.partido) <= new Date()
     return (
-      <PantallaPago
-        partido={verPago.partido}
-        grupoId={verPago.grupoId}
-        nombreJugador={nombreJugador}
-        onCerrar={() => { setVerPago(null); cargar() }}
-      />
+      <div key={g.grupoId} className="tarjeta space-y-2">
+        <div>
+          <h3 className="text-lg font-bold">{g.partido.cancha}</h3>
+          <p className="text-suave first-letter:uppercase">
+            {fechaCorta(g.partido.fecha)} · {rangoHora(g.partido)}
+          </p>
+        </div>
+        <p className={`text-lg font-semibold ${est.clase}`}>{est.texto}</p>
+
+        <ul className="space-y-2">
+          {g.filas.map((f) => (
+            <li key={f.id} className="flex items-center justify-between gap-2">
+              <span>
+                {f.nombre_invitado ?? 'Yo'}{f.posicion === 'arquero' && ' 🧤'}
+              </span>
+              {!yaEmpezo && <button onClick={() => cancelar(f, g)}>Cancelar</button>}
+            </li>
+          ))}
+        </ul>
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          {est.puedePagar && <Link to={`/pago/${g.grupoId}`} className="btn btn-activo">Ver pago</Link>}
+          {g.partido.canchas?.enlace_maps && (
+            <a href={g.partido.canchas.enlace_maps} target="_blank" rel="noreferrer" className="btn">
+              📍 Cómo llegar
+            </a>
+          )}
+        </div>
+      </div>
     )
   }
 
   return (
-    <div>
-      <h2>Mis reservas</h2>
-      {error && <p>{error}</p>}
-      {aviso && <p>{aviso}</p>}
-      {grupos.length === 0 && <p>Aún no tienes reservas.</p>}
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold">Mis reservas</h2>
+      {error && <p className="aviso aviso-error">{error}</p>}
+      {aviso && <p className="aviso aviso-ok">{aviso}</p>}
 
-      {grupos.map((g) => {
-        const est = estadoDe(g)
-        const yaEmpezo = inicioPartido(g.partido) <= new Date()
-        return (
-          <div key={g.grupoId}>
-            <h3>{g.partido.cancha} · {g.partido.fecha} · {rangoHora(g.partido)}</h3>
-{g.partido.canchas?.enlace_maps && (
-  <p>
-    <a href={g.partido.canchas.enlace_maps} target="_blank" rel="noreferrer">
-      📍 Cómo llegar
-    </a>
-  </p>
-)}
-            <p>{est.texto}</p>
+      {cargado && grupos.length === 0 && (
+        <p className="text-suave">Aún no tienes reservas. Mira los partidos y reserva tu cupo.</p>
+      )}
+      {cargado && grupos.length > 0 && proximas.length === 0 && (
+        <p className="text-suave">No tienes reservas para próximos partidos.</p>
+      )}
 
-            {g.filas.map((f) => (
-              <div key={f.id}>
-                
-                {f.nombre_invitado ?? 'Yo'}{f.posicion === 'arquero' && ' (arquero)'}{' '}
-                {!yaEmpezo && (
-                  <button onClick={() => cancelar(f, g)}>Cancelar este cupo</button>
-                )}
-              </div>
-            ))}
+      {proximas.map(tarjeta)}
 
-            {est.puedePagar && (
-              <button onClick={() => setVerPago(g)}>Ver pago</button>
-            )}
-          </div>
-        )
-      })}
+      {pasadas.length > 0 && (
+        <details>
+          <summary className="cursor-pointer py-2 font-semibold">Partidos pasados ({pasadas.length})</summary>
+          <div className="space-y-3 pt-2">{pasadas.map(tarjeta)}</div>
+        </details>
+      )}
     </div>
   )
 }
