@@ -1,20 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router'
 import { supabase } from './supabaseClient'
-import Contador from './Contador'
 import Interruptor from './Interruptor'
 import Canchas from './Canchas'
 import Cuentas from './Cuentas'
-import { bs, rangoHora, textoEquipos, finPartido } from './formato'
+import FormularioPartido from './FormularioPartido'
+import { bs, rangoHora, textoEquipos, finPartido, enlaceCambio } from './formato'
 
-const MODALIDADES = ['Fútbol 11', 'Fútbol 9', 'Fútbol 8', 'Fútbol 7', 'Fútbol 6', 'Fútbol 5', 'Futsal']
 const SECCIONES = [['partidos', 'Partidos'], ['canchas', 'Canchas'], ['cuentas', 'Cuentas']]
-
-const VACIO = {
-  cancha_id: '', modalidad: 'Fútbol 11', modalidad_otra: '',
-  fecha: '', hora: '', hora_fin: '', cuota: '',
-  cupos: 18, cupos_arco: 0, cuota_arquero: '', equipos: 0,
-}
 
 function AsignarEncargado({ partidoId, perfiles, onAsignar }) {
   const [perfilId, setPerfilId] = useState('')
@@ -46,11 +39,12 @@ export default function Admin() {
   const [encargados, setEncargados] = useState([])
   const [perfiles, setPerfiles] = useState([])
   const [canchas, setCanchas] = useState([])
-  const [nuevo, setNuevo] = useState(VACIO)
   const [error, setError] = useState(null)
   const [pasadosVisibles, setPasadosVisibles] = useState(10)
   const [pendientes, setPendientes] = useState({})
   const [creando, setCreando] = useState(false)
+  const [editandoId, setEditandoId] = useState(null)
+  const [aviso, setAviso] = useState(null)
 
   async function cargar() {
     // 6 consultas y 6 variables, en el mismo orden
@@ -66,7 +60,6 @@ export default function Admin() {
     const fallo = p.error || e.error || pf.error || c.error || dev.error || cob.error
     if (fallo) return setError(fallo.message)
 
-    // Cupos confirmados cuyo pago en cancha todavía no se cobró
     const grupos = cob.data.map((x) => x.grupo_id)
     let porCobrar = []
     if (grupos.length > 0) {
@@ -93,41 +86,36 @@ export default function Admin() {
 
   useEffect(() => { cargar() }, [])
 
-  const cambiar = (campo) => (e) => setNuevo({ ...nuevo, [campo]: e.target.value })
-
-  async function crearPartido() {
-    setError(null)
-    const { cancha_id, fecha, hora, hora_fin, cuota, cupos, equipos } = nuevo
-    const cancha = canchas.find((c) => c.id === cancha_id)
-    if (!cancha || !fecha || !hora || !cuota || !cupos) {
-      return setError('Completa todos los campos')
-    }
-    if (hora_fin && hora_fin <= hora) {
-      return setError('La hora de fin debe ser posterior a la de inicio')
-    }
-    const modalidad = nuevo.modalidad === '__otra' ? nuevo.modalidad_otra.trim() : nuevo.modalidad
-    if (!modalidad) return setError('Escribe la modalidad del partido')
-    if (modalidad.length > 30) return setError('La modalidad es demasiado larga (máximo 30 letras)')
-
-    const fila = {
-      cancha: cancha.nombre,
-      cancha_id: cancha.id,
-      modalidad,
-      fecha, hora,
-      hora_fin: hora_fin || null,
-      cuota: Number(cuota),
-      cupos: Number(cupos),
-      cupos_arco: Number(nuevo.cupos_arco),
-      equipos: equipos > 0 ? equipos : null,
-    }
-    // Si se deja vacía, la base de datos pone la mitad de la cuota
-    if (nuevo.cuota_arquero !== '') fila.cuota_arquero = Number(nuevo.cuota_arquero)
-
-    const { error } = await supabase.from('partidos').insert(fila)
-    if (error) return setError(error.message)
-    setNuevo(VACIO)
+  // Los formularios devuelven un mensaje de error (texto) o null si todo salió bien
+  async function crearPartido(fila) {
+    const datos = { ...fila }
+    if (datos.cuota_arquero === null) delete datos.cuota_arquero // la base pone la mitad
+    const { error } = await supabase.from('partidos').insert(datos)
+    if (error) return error.message
     setCreando(false)
     cargar()
+    return null
+  }
+
+  async function editarPartido(p, fila) {
+    const { data, error } = await supabase.rpc('editar_partido', {
+      p_partido: p.id,
+      p_cancha_id: fila.cancha_id,
+      p_modalidad: fila.modalidad,
+      p_fecha: fila.fecha,
+      p_hora: fila.hora,
+      p_hora_fin: fila.hora_fin,
+      p_cuota: fila.cuota,
+      p_cupos: fila.cupos,
+      p_cupos_arco: fila.cupos_arco,
+      p_cuota_arquero: fila.cuota_arquero,
+      p_equipos: fila.equipos,
+    })
+    if (error) return error.message
+    setEditandoId(null)
+    setAviso({ partidoId: p.id, ...data })
+    cargar()
+    return null
   }
 
   async function cambiarCuotaArquero(p) {
@@ -197,8 +185,9 @@ export default function Admin() {
   const proximos = vivos.filter((p) => finPartido(p).getTime() >= ahora)
   const pasados = vivos
     .filter((p) => finPartido(p).getTime() < ahora)
-    .reverse() // los más recientes primero
+    .reverse()
   const hayPendientePasado = pasados.some((p) => pendientes[p.id])
+  const partidoAviso = aviso ? partidos.find((x) => x.id === aviso.partidoId) : null
 
   const lista = filtro === 'proximos'
     ? proximos
@@ -213,7 +202,7 @@ export default function Admin() {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold">Administración</h2>
-      {error && <p className="text-rojo">{error}</p>}
+      {error && <p className="aviso aviso-error">{error}</p>}
 
       <nav className="flex gap-2">
         {SECCIONES.map(([id, texto]) => (
@@ -230,84 +219,34 @@ export default function Admin() {
 
       {seccion === 'partidos' && (
         <div className="space-y-4">
+          {aviso && (
+            <div className="aviso aviso-ok space-y-2">
+              <p>
+                Partido actualizado.
+                {aviso.activas > 0 && ` Tiene ${aviso.activas} cupo(s) activo(s).`}
+                {aviso.cambio && ' Cambiaste fecha, hora o cancha: avisa a los jugadores.'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {aviso.cambio && partidoAviso && (
+                  <a className="btn btn-activo" target="_blank" rel="noreferrer" href={enlaceCambio(partidoAviso)}>
+                    Avisar por WhatsApp
+                  </a>
+                )}
+                <button onClick={() => setAviso(null)}>Cerrar</button>
+              </div>
+            </div>
+          )}
+
           {!creando ? (
             <button onClick={() => setCreando(true)}>+ Nuevo partido</button>
           ) : (
-            <div className="space-y-2 rounded-xl border border-borde bg-tarjeta p-3">
-              <h3 className="font-bold">Nuevo partido</h3>
-              {canchas.length === 0 && (
-                <p className="text-suave">Primero crea una cancha en la pestaña "Canchas".</p>
-              )}
-              <select value={nuevo.cancha_id} onChange={cambiar('cancha_id')}>
-                <option value="">Elegir cancha...</option>
-                {canchas.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nombre}</option>
-                ))}
-              </select>
-              <select value={nuevo.modalidad} onChange={cambiar('modalidad')}>
-                {MODALIDADES.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-                <option value="__otra">Otra…</option>
-              </select>
-              {nuevo.modalidad === '__otra' && (
-                <input
-                  placeholder="Ej. Fútbol 8 mixto"
-                  maxLength={30}
-                  value={nuevo.modalidad_otra}
-                  onChange={cambiar('modalidad_otra')}
-                />
-              )}
-              <div className="flex flex-wrap gap-2">
-                <input type="date" value={nuevo.fecha} onChange={cambiar('fecha')} />
-                <label>
-                  Inicio <input type="time" value={nuevo.hora} onChange={cambiar('hora')} />
-                </label>
-                <label>
-                  Fin (opcional) <input type="time" value={nuevo.hora_fin} onChange={cambiar('hora_fin')} />
-                </label>
-              </div>
-              <input type="number" placeholder="Cuota (Bs)" value={nuevo.cuota} onChange={cambiar('cuota')} />
-              <Contador
-                etiqueta="Cupos de jugador:"
-                valor={nuevo.cupos}
-                min={2}
-                max={40}
-                onCambio={(v) => setNuevo({ ...nuevo, cupos: v })}
+            <div className="tarjeta">
+              <FormularioPartido
+                canchas={canchas}
+                textoBoton="Crear partido"
+                onGuardar={crearPartido}
+                onCancelar={() => setCreando(false)}
               />
-              <Contador
-                etiqueta="Cupos de arco:"
-                valor={nuevo.cupos_arco}
-                min={0}
-                max={6}
-                onCambio={(v) => setNuevo({ ...nuevo, cupos_arco: v })}
-              />
-              {nuevo.cupos_arco > 0 && (
-                <input
-                  type="number"
-                  placeholder="Cuota arquero (vacío = la mitad)"
-                  value={nuevo.cuota_arquero}
-                  onChange={cambiar('cuota_arquero')}
-                />
-              )}
-              <Contador
-                etiqueta="Equipos (0 = no indicar):"
-                valor={nuevo.equipos}
-                min={0}
-                max={8}
-                onCambio={(v) => setNuevo({ ...nuevo, equipos: v })}
-              />
-              {nuevo.equipos > 0 && nuevo.cupos % nuevo.equipos !== 0 && (
-                <p className="text-amarillo">
-                  Ojo: {nuevo.cupos} cupos no se dividen exactamente entre {nuevo.equipos} equipos.
-                </p>
-              )}
-              <div className="flex gap-2">
-                <button onClick={crearPartido}>Crear partido</button>
-                <button onClick={() => { setCreando(false); setNuevo(VACIO); setError(null) }}>
-                  Cancelar
-                </button>
-              </div>
             </div>
           )}
 
@@ -328,7 +267,7 @@ export default function Admin() {
           </nav>
 
           {filtro === 'pasados' && hayPendientePasado && (
-            <p className="rounded-xl border border-amarillo p-3 text-sm">
+            <p className="aviso aviso-alerta text-sm">
               ⚠️ Hay partidos pasados con cobros en cancha o devoluciones sin resolver.
               Ábrelos con "Gestionar lista".
             </p>
@@ -338,8 +277,23 @@ export default function Admin() {
 
           {lista.map((p) => {
             const delPartido = encargados.filter((e) => e.partido_id === p.id)
+
+            if (editandoId === p.id) {
+              return (
+                <div key={p.id} className="tarjeta">
+                  <FormularioPartido
+                    canchas={canchas}
+                    partido={p}
+                    textoBoton="Guardar cambios"
+                    onGuardar={(fila) => editarPartido(p, fila)}
+                    onCancelar={() => setEditandoId(null)}
+                  />
+                </div>
+              )
+            }
+
             return (
-              <div key={p.id} className="space-y-2 rounded-xl border border-borde bg-tarjeta p-3">
+              <div key={p.id} className="tarjeta space-y-2">
                 <h4 className="font-bold">
                   {p.cancha}{p.modalidad && ` (${p.modalidad})`} · {p.fecha} · {rangoHora(p)}
                   {p.estado === 'cancelado' && ' (CANCELADO)'}
@@ -364,6 +318,9 @@ export default function Admin() {
 
                 <div className="flex flex-wrap gap-2">
                   <Link to={`/admin/partidos/${p.id}`} className="btn">Gestionar lista</Link>
+                  {p.estado !== 'cancelado' && (
+                    <button onClick={() => { setAviso(null); setEditandoId(p.id) }}>Editar</button>
+                  )}
                   {p.cupos_arco > 0 && (
                     <button onClick={() => cambiarCuotaArquero(p)}>Cuota de arquero</button>
                   )}

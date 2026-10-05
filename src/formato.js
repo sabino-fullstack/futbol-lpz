@@ -79,3 +79,22 @@ export function enlaceCompartir(partido) {
     `Mira los cupos y reserva aquí 👇\n${url}`
   return `https://wa.me/?text=${encodeURIComponent(mensaje)}`
 }
+// Mensaje al jugador que pagó, para coordinar su devolución
+export function enlaceDevolucion(persona, monto, partido) {
+  const nombre = persona.apodo || persona.nombre
+  const mensaje =
+    `Hola ${nombre}, soy el encargado del partido en ${partido.cancha} ` +
+    `(${fechaCorta(partido.fecha)}, ${hhmm(partido.hora)}). ` +
+    `Te escribo por la devolución de ${bs(monto)} Bs de tu cupo cancelado. ` +
+    `¿Me envías tu QR o los datos de tu cuenta para transferirte?`
+  return `https://wa.me/${String(persona.whatsapp).replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`
+}
+
+// Aviso de cambio de fecha, hora o cancha para el grupo
+export function enlaceCambio(p) {
+  const url = `${window.location.origin}/partidos/${p.id}`
+  const mensaje =
+    `⚠️ Cambio en el partido de ${p.cancha}: ahora es ${fechaCorta(p.fecha)} ` +
+    `a las ${hhmm(p.hora)}. Mira los detalles aquí 👇\n${url}`
+  return `https://wa.me/?text=${encodeURIComponent(mensaje)}`
+}

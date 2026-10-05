@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import Contador from './Contador'
-import { bs, nombreCompleto } from './formato'
+import { bs, nombreCompleto, enlaceDevolucion } from './formato'
 
 
 const ETIQUETA_DEVOLUCION = {
@@ -173,6 +173,30 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   }
 
   const convertir = Math.min(aConvertir, Math.max(1, libres.arquero))
+  // Devoluciones pendientes, agrupadas por la persona que pagó
+const porPersona = {}
+canceladas
+  .filter((r) => r.devolucion_estado === 'pendiente')
+  .forEach((r) => {
+    const clave = r.creador?.id ?? 'manual'
+    if (!porPersona[clave]) porPersona[clave] = { creador: r.creador, items: [] }
+    porPersona[clave].items.push(r)
+  })
+const gruposDev = Object.values(porPersona)
+const otrasCanc = canceladas.filter((r) => r.devolucion_estado !== 'pendiente')
+
+async function marcarDevueltas(items) {
+  const total = items.reduce((s, r) => s + Number(r.monto_pagado), 0)
+  if (!window.confirm(`¿Ya devolviste ${bs(total)} Bs?`)) return
+  setError(null)
+  setTrabajando(true)
+  for (const r of items) {
+    const { error } = await supabase.rpc('marcar_devolucion_hecha', { p_reserva: r.id })
+    if (error) { setError(error.message); break }
+  }
+  setTrabajando(false)
+  await cargar()
+}
 
   return (
     <div>
@@ -418,28 +442,69 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
         </div>
       )}
 
-      <h3>Cancelaciones</h3>
-      {canceladas.length === 0 && <p>No hay cancelaciones.</p>}
-      {canceladas.map((r) => (
-        <div key={r.id}>
-          {r.nombre_invitado || nombreCompleto(r.perfil) || 'Jugador'}
-          {r.posicion === 'arquero' && ' (arquero)'}
-          {' · '}{r.cancelacion_tipo === 'tardia' ? 'cancelación tardía' : 'cancelación a tiempo'}
-          {' · '}
-          {r.devolucion_estado
-            ? `${bs(r.monto_pagado)} Bs · ${ETIQUETA_DEVOLUCION[r.devolucion_estado]}`
-            : 'sin pago'}{' '}
-          {['pendiente', 'no_corresponde'].includes(r.devolucion_estado) && (
-            <button
-              disabled={trabajando}
-              onClick={() => ejecutar('marcar_devolucion_hecha', { p_reserva: r.id },
-                '¿Ya devolviste este dinero?')}
-            >
-              Marcar devolución hecha
-            </button>
-          )}
-        </div>
-      ))}
+<h3>Devoluciones pendientes</h3>
+{gruposDev.length === 0 && <p className="text-suave">No hay devoluciones pendientes.</p>}
+{gruposDev.map((g) => {
+  const total = g.items.reduce((s, r) => s + Number(r.monto_pagado), 0)
+  return (
+    <div key={g.creador?.id ?? 'manual'} className="tarjeta space-y-2">
+      <p className="text-lg font-bold">{bs(total)} Bs · {g.items.length} cupo(s)</p>
+      <p>
+        {g.creador
+          ? `Devolver a: ${nombreCompleto(g.creador)}`
+          : 'Cupo agregado a mano: coordina la devolución directamente con la persona.'}
+      </p>
+      <ul className="text-sm text-suave">
+        {g.items.map((r) => (
+          <li key={r.id}>
+            {r.nombre_invitado || nombreCompleto(r.perfil) || 'Jugador'}
+            {r.posicion === 'arquero' && ' (arquero)'} · {bs(r.monto_pagado)} Bs
+            {' · '}{r.cancelacion_tipo === 'tardia' ? 'cancelación tardía' : 'a tiempo'}
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-2">
+        {g.creador?.whatsapp && (
+          <a
+            className="btn btn-activo"
+            target="_blank"
+            rel="noreferrer"
+            href={enlaceDevolucion(g.creador, total, partido)}
+          >
+            💬 Contactar por WhatsApp
+          </a>
+        )}
+        <button disabled={trabajando} onClick={() => marcarDevueltas(g.items)}>
+          Marcar devuelto
+        </button>
+      </div>
+    </div>
+  )
+})}
+
+<h3>Otras cancelaciones</h3>
+{otrasCanc.length === 0 && <p className="text-suave">No hay otras cancelaciones.</p>}
+{otrasCanc.map((r) => (
+  <div key={r.id} className="flex flex-wrap items-center gap-2">
+    <span>
+      {r.nombre_invitado || nombreCompleto(r.perfil) || 'Jugador'}
+      {r.posicion === 'arquero' && ' (arquero)'}
+      {' · '}{r.cancelacion_tipo === 'tardia' ? 'cancelación tardía' : 'cancelación a tiempo'}
+      {' · '}
+      {r.devolucion_estado
+        ? `${bs(r.monto_pagado)} Bs · ${ETIQUETA_DEVOLUCION[r.devolucion_estado]}`
+        : 'sin pago'}
+    </span>
+    {r.devolucion_estado === 'no_corresponde' && (
+      <button
+        disabled={trabajando}
+        onClick={() => ejecutar('marcar_devolucion_hecha', { p_reserva: r.id }, '¿Ya devolviste este dinero?')}
+      >
+        Marcar devolución hecha
+      </button>
+    )}
+  </div>
+))}
 
       <h3>Resumen de dinero</h3>
       <p>Cobrado (QR y cancha): {bs(cobrado)} Bs</p>
