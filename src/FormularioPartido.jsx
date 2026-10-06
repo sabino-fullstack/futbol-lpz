@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase } from './supabaseClient'
 import Contador from './Contador'
 
 const MODALIDADES = ['Fútbol 11', 'Fútbol 9', 'Fútbol 8', 'Fútbol 7', 'Fútbol 6', 'Fútbol 5', 'Futsal']
 const hh = (t) => (t ? t.slice(0, 5) : '')
+const nn = (s) => (s.trim() === '' ? null : s.trim())
 
 function valoresIniciales(p) {
   if (!p) {
@@ -10,6 +12,7 @@ function valoresIniciales(p) {
       cancha_id: '', modalidad: 'Fútbol 11', modalidad_otra: '',
       fecha: '', hora: '', hora_fin: '', cuota: '',
       cupos: 18, cupos_arco: 0, cuota_arquero: '', equipos: 0,
+      formato_juego: '', premio: '', premio_para: '', notas: '',
     }
   }
   const enLista = MODALIDADES.includes(p.modalidad)
@@ -20,15 +23,41 @@ function valoresIniciales(p) {
     fecha: p.fecha, hora: hh(p.hora), hora_fin: hh(p.hora_fin),
     cuota: String(p.cuota), cupos: p.cupos, cupos_arco: p.cupos_arco,
     cuota_arquero: String(p.cuota_arquero), equipos: p.equipos ?? 0,
+    formato_juego: p.formato_juego ?? '', premio: p.premio ?? '',
+    premio_para: p.premio_para ?? '', notas: p.notas ?? '',
   }
 }
 
 export default function FormularioPartido({ canchas, partido, textoBoton, onGuardar, onCancelar }) {
   const [v, setV] = useState(() => valoresIniciales(partido))
+  const [plantillas, setPlantillas] = useState({})
+  const [formatoTocado, setFormatoTocado] = useState(!!partido?.formato_juego)
   const [error, setError] = useState(null)
   const [guardando, setGuardando] = useState(false)
 
+  useEffect(() => {
+    supabase.from('formatos_plantilla').select('equipos, texto').then(({ data }) => {
+      const m = {}
+      ;(data ?? []).forEach((x) => { m[x.equipos] = x.texto })
+      setPlantillas(m)
+      setV((prev) =>
+        !formatoTocado && prev.formato_juego === '' && m[prev.equipos]
+          ? { ...prev, formato_juego: m[prev.equipos] }
+          : prev
+      )
+    })
+  }, [])
+
   const cambiar = (campo) => (e) => setV({ ...v, [campo]: e.target.value })
+
+  function cambiarEquipos(n) {
+    setV((prev) => {
+      const sig = { ...prev, equipos: n }
+      // Mientras no hayas escrito el formato a mano, sigue a la plantilla
+      if (!formatoTocado) sig.formato_juego = plantillas[n] ?? ''
+      return sig
+    })
+  }
 
   async function guardar() {
     setError(null)
@@ -48,6 +77,7 @@ export default function FormularioPartido({ canchas, partido, textoBoton, onGuar
       return setError('La cuota de arquero no es válida')
     }
 
+    const premio = nn(v.premio)
     setGuardando(true)
     const mensaje = await onGuardar({
       cancha_id: cancha.id,
@@ -61,10 +91,16 @@ export default function FormularioPartido({ canchas, partido, textoBoton, onGuar
       cupos_arco: Number(v.cupos_arco),
       cuota_arquero: v.cuota_arquero === '' ? null : Number(v.cuota_arquero),
       equipos: v.equipos > 0 ? v.equipos : null,
+      formato_juego: nn(v.formato_juego),
+      premio,
+      premio_para: premio ? nn(v.premio_para) : null,
+      notas: nn(v.notas),
     })
     setGuardando(false)
     if (mensaje) setError(mensaje)
   }
+
+  const porDefecto = v.equipos >= 3 ? 'Equipo con más victorias' : 'Equipo ganador'
 
   return (
     <div className="space-y-2">
@@ -134,13 +170,58 @@ export default function FormularioPartido({ canchas, partido, textoBoton, onGuar
         valor={v.equipos}
         min={0}
         max={8}
-        onCambio={(n) => setV({ ...v, equipos: n })}
+        onCambio={cambiarEquipos}
       />
       {v.equipos > 0 && v.cupos % v.equipos !== 0 && (
         <p className="text-amarillo">
           Ojo: {v.cupos} cupos no se dividen exactamente entre {v.equipos} equipos.
         </p>
       )}
+
+      <div className="space-y-1">
+        <p className="font-semibold">Cómo se juega (opcional)</p>
+        <textarea
+          rows={5}
+          maxLength={1000}
+          placeholder="Explica el formato: tiempos, rotación, desempate..."
+          value={v.formato_juego}
+          onChange={(e) => { setV({ ...v, formato_juego: e.target.value }); setFormatoTocado(true) }}
+        />
+        {plantillas[v.equipos] && v.formato_juego !== plantillas[v.equipos] && (
+          <button
+            type="button"
+            onClick={() => { setV({ ...v, formato_juego: plantillas[v.equipos] }); setFormatoTocado(false) }}
+          >
+            Usar la plantilla de {v.equipos} equipos
+          </button>
+        )}
+      </div>
+
+      <input
+        placeholder="Premio (opcional). Ej. Coca de 2 litros"
+        maxLength={80}
+        value={v.premio}
+        onChange={cambiar('premio')}
+      />
+      {v.premio.trim() !== '' && (
+        <input
+          placeholder={`¿Quién lo gana? (vacío = "${porDefecto}")`}
+          maxLength={60}
+          value={v.premio_para}
+          onChange={cambiar('premio_para')}
+        />
+      )}
+
+      <div className="space-y-1">
+        <p className="font-semibold">Notas de este partido (opcional)</p>
+        <textarea
+          rows={3}
+          maxLength={500}
+          placeholder="Ej. Traer camiseta clara y oscura."
+          value={v.notas}
+          onChange={cambiar('notas')}
+        />
+      </div>
 
       {error && <p className="aviso aviso-error">{error}</p>}
       <div className="flex gap-2">

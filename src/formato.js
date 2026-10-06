@@ -98,3 +98,9 @@ export function enlaceCambio(p) {
     `a las ${hhmm(p.hora)}. Mira los detalles aquí 👇\n${url}`
   return `https://wa.me/?text=${encodeURIComponent(mensaje)}`
 }
+// A quién va el premio: lo escrito por ti, o un valor lógico según los equipos
+export const quienGanaPremio = (p) =>
+  p.premio_para || (p.equipos >= 3 ? 'Equipo con más victorias' : 'Equipo ganador')
+// Para buscar sin importar tildes ni mayúsculas ("perez" encuentra "Pérez")
+export const sinTildes = (t) =>
+  String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()

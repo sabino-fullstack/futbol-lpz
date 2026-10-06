@@ -123,6 +123,15 @@ export default function ReservarForm({ perfil }) {
         Cuando se confirme tu primer pago, el límite sube.
       </p>
     )}
+    {perfil?.en_revision && (
+  <p className="aviso aviso-error">
+    🔎 Tu cuenta está en revisión por inasistencias. Habla con un encargado para poder reservar de nuevo.
+  </p>
+)}
+<p className="text-sm text-suave">
+  Si no vienes a un partido confirmado, queda registrada una falta. Con 2 faltas en 90 días,
+  tu cuenta queda en revisión. Si no puedes ir, cancela a tiempo.
+</p>
     {yaTengo && (
       <p className="aviso">Ya tienes un cupo en este partido. Aquí puedes sumar a otras personas.</p>
     )}
@@ -184,7 +193,7 @@ export default function ReservarForm({ perfil }) {
 
     {error && <p className="aviso aviso-error">{error}</p>}
 
-    <button onClick={reservar} disabled={enviando || max < 1} className="btn btn-primario">
+    <button onClick={reservar} disabled={enviando || max < 1 || perfil?.en_revision} className="btn btn-primario">
       {enviando ? 'Reservando...' : 'Reservar'}
     </button>
   </div>

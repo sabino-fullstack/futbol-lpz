@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient'
 import BarraCupos from './BarraCupos'
 import ConsultarEncargado from './ConsultarEncargado'
 import MiEstado from './MiEstado'
-import { bs, rangoHora, textoEquipos, hoyBolivia, etiquetaDia, inicioPartido } from './formato'
+import { bs, rangoHora, textoEquipos, hoyBolivia, etiquetaDia, inicioPartido, quienGanaPremio } from './formato'
 
 export default function Partidos() {
   const [partidos, setPartidos] = useState([])
@@ -109,8 +109,13 @@ export default function Partidos() {
                       <span className="font-bold text-verde">{bs(p.cuota)} Bs</span>
                       {textoEquipos(p) && <span className="text-suave">{textoEquipos(p)}</span>}
                       {p.canchas?.enlace_maps && (
-                        <a href={p.canchas.enlace_maps} target="_blank" rel="noreferrer">📍 Cómo llegar</a>
+                        <a href={p.canchas.enlace_maps} target="_blank" rel="noreferrer">📌🗺️Ubicacion</a>
                       )}
+                      {p.premio && (
+  <p className="rounded-lg border border-amarillo px-3 py-2 text-sm">
+    🥤 <strong>Premio:</strong> {p.premio} · {quienGanaPremio(p)}
+  </p>
+)}
                     </div>
 
                     <BarraCupos titulo="Jugadores" libres={l.jugador} total={p.cupos} />

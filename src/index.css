@@ -63,6 +63,10 @@
     border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
     border-radius: .6rem; padding: .5rem .7rem; min-height: 2.5rem; max-width: 100%;
   }
+  textarea {
+  width: 100%; border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
+  border-radius: .6rem; padding: .5rem .7rem; font-size: 1rem; font-family: inherit;
+}
 
 }
 @layer base {
@@ -72,6 +76,10 @@
   select { min-height: 3rem; font-size: 1rem; }
   input[type="checkbox"] { width: 1.4rem; height: 1.4rem; accent-color: var(--verde); }
   :focus-visible { outline: 3px solid var(--verde); outline-offset: 2px; }
+  textarea {
+  width: 100%; border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
+  border-radius: .6rem; padding: .5rem .7rem; font-size: 1rem; font-family: inherit;
+}
 }
 
 @layer components {

@@ -4,7 +4,7 @@ import { normalizarNumero } from './auth'
 import { nombreCompleto } from './formato'
 
 const COLUMNAS =
-  'id, nombre, apellido, apodo, whatsapp, rol, nivel, activo, rechazos_seguidos, suspendido_motivo'
+  'id, nombre, apellido, apodo, whatsapp, rol, nivel, activo, rechazos_seguidos, suspendido_motivo, en_revision, revision_motivo'
 
 export default function Cuentas() {
   const [texto, setTexto] = useState('')
@@ -73,12 +73,12 @@ export default function Cuentas() {
   }
 
   async function aprobar(p, confiable) {
-    const ok = await ejecutar('aprobar_cuenta', { p_perfil: p.id, p_confiable: confiable },
-      confiable
-        ? `¿Marcar a ${nombreCompleto(p)} como cuenta confiable? Tendrá límites más amplios.`
-        : `¿Permitir que ${nombreCompleto(p)} vuelva a avisar pagos?`)
-    if (ok) setAviso('Listo.')
-  }
+  const ok = await ejecutar('aprobar_cuenta', { p_perfil: p.id, p_confiable: confiable },
+    confiable
+      ? `¿Marcar a ${nombreCompleto(p)} como cuenta confiable? Tendrá límites más amplios.`
+      : `¿Quitar las restricciones de ${nombreCompleto(p)} (pagos rechazados o revisión por faltas)?`)
+  if (ok) setAviso('Listo.')
+}
 
   async function bloquearNumero() {
     const n = normalizarNumero(numeroNuevo)
@@ -130,6 +130,10 @@ export default function Cuentas() {
             {p.rechazos_seguidos >= 2 && ' · ⚠️ pagos rechazados'}
           </p>
           {!p.activo && <p className="text-rojo">Suspendida: {p.suspendido_motivo}</p>}
+          {p.activo && p.en_revision && (
+  <p className="text-amarillo">🔎 En revisión: {p.revision_motivo}</p>
+)}
+          
           <div className="flex flex-wrap gap-2 pt-1">
             {p.activo && p.rol !== 'superadmin' && (
               <button disabled={trabajando} onClick={() => suspender(p)}>Suspender</button>
@@ -145,6 +149,9 @@ export default function Cuentas() {
                 Permitir avisar pagos
               </button>
             )}
+            {p.activo && p.en_revision && (
+  <button disabled={trabajando} onClick={() => aprobar(p, false)}>Quitar revisión</button>
+)}
           </div>
         </div>
       ))}

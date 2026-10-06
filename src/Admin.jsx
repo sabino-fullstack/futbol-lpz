@@ -6,8 +6,9 @@ import Canchas from './Canchas'
 import Cuentas from './Cuentas'
 import FormularioPartido from './FormularioPartido'
 import { bs, rangoHora, textoEquipos, finPartido, enlaceCambio } from './formato'
+import Formatos from './Formatos'
 
-const SECCIONES = [['partidos', 'Partidos'], ['canchas', 'Canchas'], ['cuentas', 'Cuentas']]
+const SECCIONES = [['partidos', 'Partidos'], ['canchas', 'Canchas'], ['formatos', 'Formatos'], ['cuentas', 'Cuentas']]
 
 function AsignarEncargado({ partidoId, perfiles, onAsignar }) {
   const [perfilId, setPerfilId] = useState('')
@@ -76,6 +77,9 @@ export default function Admin() {
     }
     dev.data.forEach((x) => sumar(x.partido_id, 'devoluciones'))
     porCobrar.forEach((x) => sumar(x.partido_id, 'cobros'))
+    const r = await supabase.from('reservas').select('partido_id')
+  .in('grupo_id', grupos).eq('estado', 'confirmado')
+  .neq('asistencia', 'no_asistio')
 
     setPartidos(p.data)
     setEncargados(e.data)
@@ -110,6 +114,10 @@ export default function Admin() {
       p_cupos_arco: fila.cupos_arco,
       p_cuota_arquero: fila.cuota_arquero,
       p_equipos: fila.equipos,
+      p_formato_juego: fila.formato_juego,
+p_premio: fila.premio,
+p_premio_para: fila.premio_para,
+p_notas: fila.notas,
     })
     if (error) return error.message
     setEditandoId(null)
@@ -204,7 +212,7 @@ export default function Admin() {
       <h2 className="text-xl font-bold">Administración</h2>
       {error && <p className="aviso aviso-error">{error}</p>}
 
-      <nav className="flex gap-2">
+      <nav className="flex flex-wrap gap-2">
         {SECCIONES.map(([id, texto]) => (
           <NavLink
             key={id}
@@ -362,6 +370,7 @@ export default function Admin() {
 
       {seccion === 'canchas' && <Canchas canchas={canchas} onCambio={cargar} />}
       {seccion === 'cuentas' && <Cuentas />}
+      {seccion === 'formatos' && <Formatos />}
     </div>
   )
 }

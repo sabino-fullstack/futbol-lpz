@@ -20,63 +20,119 @@ async function borrarFoto(url) {
 }
 
 const enlaceValido = (texto) => texto === '' || /^https:\/\//i.test(texto)
+const nn = (s) => (s.trim() === '' ? null : s.trim())
+
+function FormCancha({ inicial, conFoto, textoBoton, onGuardar, onCancelar }) {
+  const [f, setF] = useState({
+    nombre: inicial?.nombre ?? '',
+    enlace: inicial?.enlace_maps ?? '',
+    direccion: inicial?.direccion ?? '',
+    referencia: inicial?.referencia ?? '',
+    recomendaciones: inicial?.recomendaciones ?? '',
+  })
+  const [archivo, setArchivo] = useState(null)
+  const [error, setError] = useState(null)
+  const [guardando, setGuardando] = useState(false)
+  const set = (campo) => (e) => setF({ ...f, [campo]: e.target.value })
+
+  async function guardar() {
+    setError(null)
+    if (!f.nombre.trim()) return setError('Escribe el nombre de la cancha')
+    if (!enlaceValido(f.enlace.trim())) return setError('El enlace debe empezar con https://')
+    setGuardando(true)
+    const msg = await onGuardar(
+      {
+        nombre: f.nombre.trim(),
+        enlace_maps: nn(f.enlace),
+        direccion: nn(f.direccion),
+        referencia: nn(f.referencia),
+        recomendaciones: nn(f.recomendaciones),
+      },
+      archivo
+    )
+    setGuardando(false)
+    if (msg) setError(msg)
+  }
+
+  return (
+    <div className="space-y-2">
+      <input
+        placeholder="Nombre (ej. Munaypata)"
+        value={f.nombre}
+        onChange={set('nombre')}
+        disabled={!!inicial}
+      />
+      <input placeholder="Enlace de Google Maps (opcional)" value={f.enlace} onChange={set('enlace')} />
+      <input
+        placeholder="Dirección escrita (ej. Av. ... esquina ...)"
+        maxLength={200}
+        value={f.direccion}
+        onChange={set('direccion')}
+      />
+      <input
+        placeholder="Referencia (ej. frente a la plaza, a una cuadra del mercado)"
+        maxLength={200}
+        value={f.referencia}
+        onChange={set('referencia')}
+      />
+      <textarea
+        rows={4}
+        maxLength={600}
+        placeholder="Recomendaciones de la cancha: parqueo, vestuarios, qué llevar..."
+        value={f.recomendaciones}
+        onChange={set('recomendaciones')}
+      />
+      {conFoto && (
+        <label className="block">
+          Foto (opcional):{' '}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(e) => setArchivo(e.target.files[0] ?? null)}
+          />
+        </label>
+      )}
+      {error && <p className="aviso aviso-error">{error}</p>}
+      <div className="flex gap-2">
+        <button disabled={guardando} onClick={guardar}>
+          {guardando ? 'Guardando...' : textoBoton}
+        </button>
+        {onCancelar && <button onClick={onCancelar}>Cancelar</button>}
+      </div>
+    </div>
+  )
+}
 
 export default function Canchas({ canchas, onCambio }) {
-  const [nombre, setNombre] = useState('')
-  const [enlace, setEnlace] = useState('')
-  const [archivo, setArchivo] = useState(null)
-  const [clave, setClave] = useState(0) // para vaciar el selector de archivo
   const [error, setError] = useState(null)
   const [trabajando, setTrabajando] = useState(false)
+  const [editandoId, setEditandoId] = useState(null)
+  const [clave, setClave] = useState(0) // reinicia el formulario de nueva cancha
 
-  async function crear() {
-    setError(null)
-    const n = nombre.trim()
-    const e = enlace.trim()
-    if (!n) return setError('Escribe el nombre de la cancha')
-    if (!enlaceValido(e)) return setError('El enlace debe empezar con https://')
-
-    setTrabajando(true)
+  async function crear(d, archivo) {
+    let foto_url = null
     try {
-      const foto_url = archivo ? await subirFoto(archivo) : null
-      const { error } = await supabase
-        .from('canchas')
-        .insert({ nombre: n, enlace_maps: e || null, foto_url })
+      foto_url = archivo ? await subirFoto(archivo) : null
+      const { error } = await supabase.from('canchas').insert({ ...d, foto_url })
       if (error) {
-        await borrarFoto(foto_url) // no dejar fotos huérfanas
-        throw new Error(
-          error.code === '23505' ? 'Ya existe una cancha con ese nombre' : error.message
-        )
+        await borrarFoto(foto_url)
+        return error.code === '23505' ? 'Ya existe una cancha con ese nombre' : error.message
       }
-      setNombre('')
-      setEnlace('')
-      setArchivo(null)
       setClave(clave + 1)
       onCambio()
+      return null
     } catch (err) {
-      setError(err.message)
+      return err.message
     }
-    setTrabajando(false)
   }
 
-  async function actualizar(id, cambios) {
-    setError(null)
-    const { data, error } = await supabase
-      .from('canchas').update(cambios).eq('id', id).select('id')
-    if (error) return setError(error.message)
-    if (!data?.length) return setError('No se pudo guardar el cambio')
+  async function guardarEdicion(id, d) {
+    const { data, error } = await supabase.from('canchas').update(d).eq('id', id).select('id')
+    if (error) return error.code === '23505' ? 'Ya existe una cancha con ese nombre' : error.message
+    if (!data?.length) return 'No se pudo guardar el cambio'
+    setEditandoId(null)
     onCambio()
-  }
-
-  async function editarEnlace(c) {
-    const texto = window.prompt(
-      'Enlace de Google Maps (déjalo vacío para quitarlo):',
-      c.enlace_maps ?? ''
-    )
-    if (texto === null) return
-    const e = texto.trim()
-    if (!enlaceValido(e)) return setError('El enlace debe empezar con https://')
-    await actualizar(c.id, { enlace_maps: e || null })
+    return null
   }
 
   async function cambiarFoto(c, archivoNuevo) {
@@ -113,54 +169,62 @@ export default function Canchas({ canchas, onCambio }) {
   }
 
   return (
-    <div>
-      {error && <p>{error}</p>}
-      {trabajando && <p>Procesando...</p>}
+    <div className="space-y-4">
+      {error && <p className="aviso aviso-error">{error}</p>}
+      {trabajando && <p className="text-suave">Procesando...</p>}
 
-      <h4>Nueva cancha</h4>
-      <input placeholder="Nombre (ej. Munaypata)" value={nombre}
-        onChange={(e) => setNombre(e.target.value)} />
-      <input placeholder="Enlace de Google Maps (opcional)" value={enlace}
-        onChange={(e) => setEnlace(e.target.value)} />
-      <label>
-        Foto (opcional):{' '}
-        <input
-          key={clave}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          onChange={(e) => setArchivo(e.target.files[0] ?? null)}
-        />
-      </label>
-      <button disabled={trabajando} onClick={crear}>Crear cancha</button>
+      <div className="tarjeta space-y-2">
+        <h4 className="font-bold">Nueva cancha</h4>
+        <FormCancha key={clave} conFoto textoBoton="Crear cancha" onGuardar={crear} />
+      </div>
 
-      <h4>Canchas creadas</h4>
-      {canchas.length === 0 && <p>Todavía no hay canchas.</p>}
-      {canchas.map((c) => (
-        <div key={c.id}>
-          <strong>{c.nombre}</strong>
-          {c.foto_url
-            ? <div><img src={c.foto_url} alt={c.nombre} width="220" /></div>
-            : <p>Sin foto</p>}
-          {c.enlace_maps
-            ? <p><a href={c.enlace_maps} target="_blank" rel="noreferrer">Ver en Google Maps</a></p>
-            : <p>Sin enlace de Maps</p>}
-          <button disabled={trabajando} onClick={() => editarEnlace(c)}>Editar enlace</button>{' '}
-          <label>
-            Cambiar foto:{' '}
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              disabled={trabajando}
-              onChange={(e) => {
-                cambiarFoto(c, e.target.files[0])
-                e.target.value = ''
-              }}
+      <h4 className="font-bold">Canchas creadas</h4>
+      {canchas.length === 0 && <p className="text-suave">Todavía no hay canchas.</p>}
+
+      {canchas.map((c) =>
+        editandoId === c.id ? (
+          <div key={c.id} className="tarjeta">
+            <FormCancha
+              inicial={c}
+              textoBoton="Guardar cambios"
+              onGuardar={(d) => guardarEdicion(c.id, d)}
+              onCancelar={() => setEditandoId(null)}
             />
-          </label>{' '}
-          <button disabled={trabajando} onClick={() => eliminar(c)}>Eliminar</button>
-          <hr />
-        </div>
-      ))}
+          </div>
+        ) : (
+          <div key={c.id} className="tarjeta space-y-2">
+            <strong className="text-lg">{c.nombre}</strong>
+            {c.foto_url
+              ? <img src={c.foto_url} alt={c.nombre} className="w-56 max-w-full rounded-lg" />
+              : <p className="text-suave">Sin foto</p>}
+            {c.direccion && <p className="break-words">📍 {c.direccion}</p>}
+            {c.referencia && <p className="break-words text-sm text-suave">{c.referencia}</p>}
+            {c.recomendaciones && (
+              <p className="whitespace-pre-line break-words text-sm">{c.recomendaciones}</p>
+            )}
+            {c.enlace_maps
+              ? <a href={c.enlace_maps} target="_blank" rel="noreferrer">Ver en Google Maps</a>
+              : <p className="text-sm text-suave">Sin enlace de Maps</p>}
+            <div className="flex flex-wrap gap-2">
+              <button disabled={trabajando} onClick={() => setEditandoId(c.id)}>Editar datos</button>
+              <label className="btn cursor-pointer">
+                Cambiar foto
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  disabled={trabajando}
+                  onChange={(e) => {
+                    cambiarFoto(c, e.target.files[0])
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              <button disabled={trabajando} onClick={() => eliminar(c)}>Eliminar</button>
+            </div>
+          </div>
+        )
+      )}
     </div>
   )
 }

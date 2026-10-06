@@ -5,9 +5,10 @@ import BarraCupos from './BarraCupos'
 import ConsultarEncargado from './ConsultarEncargado'
 import MiEstado from './MiEstado'
 import {
-  bs, rangoHora, textoEquipos, fechaCorta, inicioPartido, finPartido, enlaceCompartir,
+  bs, rangoHora, textoEquipos, fechaCorta, inicioPartido, finPartido, enlaceCompartir, quienGanaPremio
 } from './formato'
 import { useVolver } from './navegacion'
+
 
 const GRUPOS = [
   ['confirmado', 'Confirmados'],
@@ -25,7 +26,7 @@ export default function DetallePartido() {
     setError(null)
     const [p, lj, la, li, me] = await Promise.all([
       supabase.from('partidos')
-        .select('*, canchas(nombre, enlace_maps, foto_url), encargados(id, perfiles(nombre, apellido, apodo, whatsapp))')
+        .select('*, canchas(nombre, enlace_maps, foto_url, direccion, referencia, recomendaciones), encargados(id, perfiles(nombre, apellido, apodo, whatsapp))')
         .eq('id', partidoId).maybeSingle(),
       supabase.rpc('cupos_libres', { p_partido: partidoId, p_posicion: 'jugador' }),
       supabase.rpc('cupos_libres', { p_partido: partidoId, p_posicion: 'arquero' }),
@@ -62,6 +63,8 @@ export default function DetallePartido() {
   const terminado = finPartido(p).getTime() < Date.now()
   const hayLugar = libres.jugador > 0 || libres.arquero > 0
   const puedeReservar = p.estado === 'abierto' && !empezo && hayLugar
+  const c = p.canchas
+const hayLlegar = c && (c.direccion || c.referencia || c.enlace_maps || c.recomendaciones)
 
   return (
     <div className="space-y-4">
@@ -128,6 +131,46 @@ export default function DetallePartido() {
           </a>
         </div>
       </article>
+      {(hayLlegar || p.formato_juego || p.premio || p.notas) && (
+  <section className="space-y-2">
+    {p.premio && (
+      <div className="tarjeta space-y-1">
+        <p className="font-semibold">🥤 Premio</p>
+        <p className="break-words">{p.premio}</p>
+        <p className="text-sm text-suave">{quienGanaPremio(p)}</p>
+      </div>
+    )}
+    {p.formato_juego && (
+      <details className="tarjeta">
+        <summary className="cursor-pointer font-semibold">⚽ Cómo se juega</summary>
+        <p className="whitespace-pre-line break-words pt-2">{p.formato_juego}</p>
+      </details>
+    )}
+    {hayLlegar && (
+      <details className="tarjeta">
+        <summary className="cursor-pointer font-semibold">📍 Cómo llegar y recomendaciones</summary>
+        <div className="space-y-2 pt-2">
+          {c.direccion && <p className="break-words">{c.direccion}</p>}
+          {c.referencia && <p className="break-words text-suave">{c.referencia}</p>}
+          {c.enlace_maps && (
+            <a href={c.enlace_maps} target="_blank" rel="noreferrer" className="btn">
+              Abrir en Google Maps
+            </a>
+          )}
+          {c.recomendaciones && (
+            <p className="whitespace-pre-line break-words">{c.recomendaciones}</p>
+          )}
+        </div>
+      </details>
+    )}
+    {p.notas && (
+      <details className="tarjeta" open>
+        <summary className="cursor-pointer font-semibold">📝 Notas de este partido</summary>
+        <p className="whitespace-pre-line break-words pt-2">{p.notas}</p>
+      </details>
+    )}
+  </section>
+)}
 
       <section className="space-y-3">
         <h3 className="text-lg font-bold">Lista de jugadores ({lista.length})</h3>

@@ -13,6 +13,7 @@ export default function MisReservas({ perfilId }) {
   const [cargado, setCargado] = useState(false)
   const [error, setError] = useState(null)
   const [aviso, setAviso] = useState(null)
+  const [cuenta, setCuenta] = useState({ faltas: 0, revision: false })  
 
   async function cargar() {
     const [r, p] = await Promise.all([
@@ -43,6 +44,12 @@ export default function MisReservas({ perfilId }) {
   }
 
   useEffect(() => { cargar() }, [])
+  useEffect(() => {
+  Promise.all([
+    supabase.rpc('mis_faltas'),
+    supabase.from('perfiles').select('en_revision').eq('id', perfilId).single(),
+  ]).then(([f, p]) => setCuenta({ faltas: f.data ?? 0, revision: p.data?.en_revision === true }))
+}, [perfilId])
 
   function estadoDe(g) {
     if (g.pago?.estado === 'verificado') return { texto: '✅ Cupo confirmado', clase: 'text-verde', puedePagar: false }
@@ -142,6 +149,18 @@ export default function MisReservas({ perfilId }) {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold">Mis reservas</h2>
+      {cuenta.revision && (
+  <p className="aviso aviso-error">
+    🔎 Tu cuenta está en revisión por inasistencias. No puedes reservar hasta que un encargado
+    la apruebe: escríbele por WhatsApp.
+  </p>
+)}
+{!cuenta.revision && cuenta.faltas === 1 && (
+  <p className="aviso aviso-alerta">
+    Tienes 1 inasistencia en los últimos 90 días. Con la segunda, tu cuenta quedará en revisión.
+    Si no puedes ir, cancela tu cupo a tiempo.
+  </p>
+)}
       {error && <p className="aviso aviso-error">{error}</p>}
       {aviso && <p className="aviso aviso-ok">{aviso}</p>}
 
