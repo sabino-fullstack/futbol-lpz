@@ -6,8 +6,15 @@ export default function ActualizarApp() {
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(_url, registro) {
-      // Mientras la app está abierta, busca versiones nuevas cada hora
-      if (registro) setInterval(() => registro.update(), 60 * 60 * 1000)
+      if (!registro) return
+      const buscar = () => {
+        if (navigator.onLine) registro.update().catch(() => {})
+      }
+      // Cada hora, y cada vez que la app vuelve a primer plano
+      setInterval(buscar, 60 * 60 * 1000)
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') buscar()
+      })
     },
   })
 
