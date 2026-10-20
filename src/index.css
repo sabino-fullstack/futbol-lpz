@@ -1,28 +1,29 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
-
 :root {
   color-scheme: light;
-  --fondo: #f5f6f3;
+  --fondo: #f4f5f2;
   --tarjeta: #ffffff;
-  --borde: #e2e5e0;
+  --borde: #e3e6e1;
   --texto: #12161a;
   --suave: #5b6670;
   --verde: #178a3d;
+  --sobre-verde: #ffffff;
   --rojo: #c81e2b;
-    --amarillo: #d99a06;
+  --amarillo: #d99a06;
 }
 .dark {
   color-scheme: dark;
-  --fondo: #0b0d10;
+  --fondo: #0a0c0f;
   --tarjeta: #14181d;
-  --borde: #262d35;
+  --borde: #232a31;
   --texto: #f3f5f7;
   --suave: #9aa4ae;
   --verde: #22b04f;
+  --sobre-verde: #04210d;
   --rojo: #ef3340;
-    --amarillo: #f5b82e;
+  --amarillo: #f5b82e;
 }
 
 @theme inline {
@@ -32,64 +33,76 @@
   --color-texto: var(--texto);
   --color-suave: var(--suave);
   --color-verde: var(--verde);
+  --color-sobre-verde: var(--sobre-verde);
   --color-rojo: var(--rojo);
-    --color-amarillo: var(--amarillo);
-}
-@layer components {
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
-    border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
-    border-radius: .6rem; padding: .5rem .9rem; min-height: 2.5rem; text-decoration: none;
-  }
-  .btn-activo { background: var(--verde); color: #fff; border-color: transparent; }
-  .btn-primario {
-    background: var(--verde); color: #fff; border-color: transparent; font-weight: 700;
-    width: 100%; padding: .8rem 1rem; font-size: 1rem; border-radius: .75rem;
-  }
+  --color-amarillo: var(--amarillo);
 }
 
-/* Tailwind quita el aspecto por defecto de botones e inputs.
-   Estos estilos mantienen legibles las pantallas que aún no rediseñamos. */
+@theme {
+  --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif;
+}
+
 @layer base {
+  html { font-size: 16px; }
   body { background: var(--fondo); color: var(--texto); }
-  a { color: var(--verde); text-decoration: underline; }
+  h2, h3 {
+    font-family: var(--font-display); text-transform: uppercase;
+    letter-spacing: .02em; font-weight: 700; line-height: 1.1;
+  }
+  h2 { font-size: 1.6rem; }
+  h3 { font-size: 1.3rem; }
+  a { color: var(--verde); text-decoration: underline; text-underline-offset: 3px; }
   img { max-width: 100%; }
+
   button:not([role="switch"]) {
     cursor: pointer; border: 1px solid var(--borde); background: var(--tarjeta);
-    color: var(--texto); border-radius: .6rem; padding: .5rem .9rem; min-height: 2.5rem;
+    color: var(--texto); border-radius: .65rem; padding: .4rem .85rem;
+    min-height: 2.5rem; font-size: .95rem; font-weight: 600;
   }
   button:disabled { opacity: .5; cursor: not-allowed; }
-  input:not([type="checkbox"]):not([type="file"]), select {
-    border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
-    border-radius: .6rem; padding: .5rem .7rem; min-height: 2.5rem; max-width: 100%;
-  }
-  textarea {
-  width: 100%; border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
-  border-radius: .6rem; padding: .5rem .7rem; font-size: 1rem; font-family: inherit;
-}
 
-}
-@layer base {
-  html { font-size: 17px; }
-  button:not([role="switch"]),
-  input:not([type="checkbox"]):not([type="file"]),
-  select { min-height: 3rem; font-size: 1rem; }
-  input[type="checkbox"] { width: 1.4rem; height: 1.4rem; accent-color: var(--verde); }
+  /* 16 px mínimo en campos: así el iPhone no hace zoom al tocarlos */
+  input:not([type="checkbox"]):not([type="file"]), select, textarea {
+    border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
+    border-radius: .65rem; padding: .45rem .75rem; min-height: 2.6rem;
+    font-size: 1rem; max-width: 100%;
+  }
+  textarea { width: 100%; font-family: inherit; }
+  input[type="checkbox"] { width: 1.25rem; height: 1.25rem; accent-color: var(--verde); }
   :focus-visible { outline: 3px solid var(--verde); outline-offset: 2px; }
-  textarea {
-  width: 100%; border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
-  border-radius: .6rem; padding: .5rem .7rem; font-size: 1rem; font-family: inherit;
-}
 }
 
 @layer components {
-  .btn { min-height: 3rem; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+    cursor: pointer; border: 1px solid var(--borde); background: var(--tarjeta);
+    color: var(--texto); border-radius: .65rem; padding: .4rem .85rem;
+    min-height: 2.5rem; font-size: .95rem; font-weight: 600; text-decoration: none;
+  }
+  .btn-icono { padding: 0; width: 2.5rem; }
+  .btn-activo { background: var(--verde); color: var(--sobre-verde); border-color: transparent; }
+  .btn-primario {
+    background: var(--verde); color: var(--sobre-verde); border-color: transparent;
+    width: 100%; min-height: 2.8rem; padding: .55rem 1rem; border-radius: .75rem;
+    font-family: var(--font-display); font-size: 1.15rem; font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase;
+  }
   .tarjeta {
     border: 1px solid var(--borde); background: var(--tarjeta);
-    border-radius: 1rem; padding: 1rem;
+    border-radius: 1rem; padding: .9rem;
   }
-  .aviso { border: 1px solid var(--borde); border-radius: .75rem; padding: .75rem 1rem; }
+  .aviso { border: 1px solid var(--borde); border-radius: .75rem; padding: .65rem .9rem; }
   .aviso-error { border-color: var(--rojo); color: var(--rojo); }
   .aviso-ok { border-color: var(--verde); }
   .aviso-alerta { border-color: var(--amarillo); }
+}
+
+/* Cinta de avisos: el contenido se repite dos veces para que el bucle no se note */
+@keyframes cinta { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.cinta-pista { display: flex; width: max-content; animation: cinta 45s linear infinite; }
+.cinta:hover .cinta-pista, .cinta:active .cinta-pista { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .cinta-pista { animation: none; width: auto; flex-wrap: wrap; }
+  .cinta-copia { display: none; }
 }

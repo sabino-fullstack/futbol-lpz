@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Moon, Sun } from 'lucide-react'
 
 export default function BotonTema() {
   const [oscuro, setOscuro] = useState(() =>
@@ -13,8 +14,12 @@ export default function BotonTema() {
   }
 
   return (
-    <button onClick={alternar} aria-label="Cambiar entre modo oscuro y claro">
-      {oscuro ? '☀️' : '🌙'}
+    <button
+      onClick={alternar}
+      aria-label="Cambiar entre modo oscuro y claro"
+      className="btn btn-icono"
+    >
+      {oscuro ? <Sun size={18} /> : <Moon size={18} />}
     </button>
   )
 }

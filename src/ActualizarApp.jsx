@@ -20,7 +20,7 @@ export default function ActualizarApp() {
 
   if (!hayNueva) return null
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 p-3">
+    <div className="fixed inset-x-0 bottom-20 z-30 p-3">
       <div className="tarjeta mx-auto flex max-w-xl items-center justify-between gap-3 shadow-lg">
         <span>Hay una versión nueva de la app.</span>
         <div className="flex gap-2">

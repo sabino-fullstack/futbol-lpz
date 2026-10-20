@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, NavLink, Link, useLocation } from 'react-router'
+import { CalendarDays, ClipboardList, LogOut, Settings, Ticket } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import { salir } from './auth'
 import Partidos from './Partidos'
+import DetallePartido from './DetallePartido'
 import ReservarForm from './ReservarForm'
 import PantallaPago from './PantallaPago'
 import MisReservas from './MisReservas'
@@ -12,10 +14,10 @@ import Admin from './Admin'
 import PantallaAcceso from './PantallaAcceso'
 import CuentaSuspendida from './CuentaSuspendida'
 import BotonTema from './BotonTema'
-import ErrorBoundary from './ErrorBoundary'
-import DetallePartido from './DetallePartido'
-import ActualizarApp from './ActualizarApp'
 import AvisoConexion from './AvisoConexion'
+import ActualizarApp from './ActualizarApp'
+import ErrorBoundary from './ErrorBoundary'
+import CintaAvisos from './CintaAvisos'
 
 function ScrollArriba() {
   const { pathname } = useLocation()
@@ -66,72 +68,92 @@ function App() {
 
   if (cargando) return <p className="p-4 text-suave">Cargando...</p>
   if (!sesion) return <PantallaAcceso />
-  // Esperamos a saber el rol antes de decidir qué direcciones existen
   if (!verificado) return <p className="p-4 text-suave">Cargando...</p>
   if (perfil && perfil.activo === false) return <CuentaSuspendida />
 
   const esSuperadmin = perfil?.rol === 'superadmin'
   const tabs = [
-    ['/partidos', 'Partidos'],
-    ['/reservas', 'Mis reservas'],
-    esEncargado && ['/a-cargo', 'A mi cargo'],
-    esSuperadmin && ['/admin', 'Administración'],
+    ['/partidos', 'Partidos', CalendarDays],
+    ['/reservas', 'Mis reservas', Ticket],
+    esEncargado && ['/a-cargo', 'A mi cargo', ClipboardList],
+    esSuperadmin && ['/admin', 'Admin', Settings],
   ].filter(Boolean)
+
+  // La cinta (y cualquier publicidad) no aparece en pago ni en los paneles
+  const sinCinta = ['/pago', '/admin', '/a-cargo'].some((r) => pathname.startsWith(r))
 
   return (
     <div className="min-h-screen">
       <ScrollArriba />
-      <header className="sticky top-0 z-10 border-b border-borde bg-fondo/90 backdrop-blur">
-        <div className="mx-auto flex max-w-xl items-center gap-3 p-3">
-          <Link to="/partidos">
-            <img src="/logo.png" alt="Fútbol LPZ" className="h-10 w-10 rounded-full" />
+      {!sinCinta && <CintaAvisos />}
+
+      <header className="border-b border-borde bg-fondo">
+        <div className="mx-auto flex max-w-xl items-center gap-2.5 px-3 py-2">
+          <Link to="/partidos" className="flex flex-1 items-center gap-2.5 no-underline">
+            <img src="/logo.png" alt="" className="h-9 w-9 rounded-full" />
+            <span className="font-display text-xl font-extrabold uppercase leading-none tracking-wide text-texto">
+              Fútbol <span className="text-verde">LPZ</span>
+            </span>
           </Link>
-          <div className="flex-1 leading-tight">
-            <p className="font-bold">Fútbol LPZ V1.1</p>
-            <p className="text-xs text-suave">Hola, {perfil?.nombre ?? '...'}</p>
-          </div>
+          <span className="hidden text-sm text-suave min-[400px]:inline">
+            Hola, {perfil?.nombre ?? ''}
+          </span>
           <BotonTema />
-          <button onClick={salir}>Salir</button>
+          <button onClick={salir} aria-label="Cerrar sesión" className="btn btn-icono">
+            <LogOut size={18} />
+          </button>
         </div>
-        <nav className="mx-auto flex max-w-xl gap-2 overflow-x-auto px-3 pb-3">
-          {tabs.map(([ruta, texto]) => (
-            <NavLink
-              key={ruta}
-              to={ruta}
-              className={({ isActive }) => `btn whitespace-nowrap ${isActive ? 'btn-activo' : ''}`}
-            >
-              {texto}
-            </NavLink>
-          ))}
-        </nav>
         <AvisoConexion />
       </header>
 
-      <main className="mx-auto max-w-xl p-4">
+      <main className="mx-auto max-w-xl px-3 pb-28 pt-3">
         <ErrorBoundary key={pathname}>
-        <Routes>
-          <Route path="/" element={<Navigate to="/partidos" replace />} />
-          <Route path="/partidos" element={<Partidos />} />
-          <Route path="/partidos/:partidoId" element={<DetallePartido />} />
-          <Route path="/partidos/:partidoId/reservar" element={<ReservarForm perfil={perfil} />} />
-          <Route path="/pago/:grupoId" element={<PantallaPago nombreJugador={perfil?.nombre ?? ''} />} />
-          <Route path="/reservas" element={<MisReservas perfilId={usuarioId} />} />
+          <Routes>
+            <Route path="/" element={<Navigate to="/partidos" replace />} />
+            <Route path="/partidos" element={<Partidos />} />
+            <Route path="/partidos/:partidoId" element={<DetallePartido />} />
+            <Route path="/partidos/:partidoId/reservar" element={<ReservarForm perfil={perfil} />} />
+            <Route path="/pago/:grupoId" element={<PantallaPago nombreJugador={perfil?.nombre ?? ''} />} />
+            <Route path="/reservas" element={<MisReservas perfilId={usuarioId} />} />
 
-          {esEncargado && <Route path="/a-cargo" element={<MisPartidos perfilId={usuarioId} />} />}
-          {esEncargado && (
-            <Route path="/a-cargo/:partidoId" element={<PanelRuta perfilId={usuarioId} volverA="/a-cargo" />} />
-          )}
+            {esEncargado && <Route path="/a-cargo" element={<MisPartidos perfilId={usuarioId} />} />}
+            {esEncargado && (
+              <Route path="/a-cargo/:partidoId" element={<PanelRuta perfilId={usuarioId} volverA="/a-cargo" />} />
+            )}
 
-          {esSuperadmin && <Route path="/admin" element={<Navigate to="/admin/partidos" replace />} />}
-          {esSuperadmin && (
-            <Route path="/admin/partidos/:partidoId" element={<PanelRuta perfilId={usuarioId} volverA="/admin/partidos" />} />
-          )}
-          {esSuperadmin && <Route path="/admin/:seccion" element={<Admin />} />}
+            {esSuperadmin && <Route path="/admin" element={<Navigate to="/admin/partidos" replace />} />}
+            {esSuperadmin && (
+              <Route path="/admin/partidos/:partidoId" element={<PanelRuta perfilId={usuarioId} volverA="/admin/partidos" />} />
+            )}
+            {esSuperadmin && <Route path="/admin/:seccion" element={<Admin />} />}
 
-          <Route path="*" element={<Navigate to="/partidos" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/partidos" replace />} />
+          </Routes>
         </ErrorBoundary>
       </main>
+
+      <nav
+        aria-label="Navegación principal"
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-borde bg-tarjeta/95 backdrop-blur"
+      >
+        <div className="mx-auto flex max-w-xl pb-[env(safe-area-inset-bottom)]">
+          {tabs.map(([ruta, texto, Icono]) => (
+            <NavLink
+              key={ruta}
+              to={ruta}
+              className={({ isActive }) =>
+                `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-semibold no-underline ${
+                  isActive ? 'text-verde' : 'text-suave'
+                }`
+              }
+            >
+              <Icono size={22} />
+              {texto}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
+
       <ActualizarApp />
     </div>
   )

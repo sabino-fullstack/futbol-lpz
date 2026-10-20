@@ -14,9 +14,9 @@ export default function BarraCupos({ titulo, libres, total }) {
 
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between text-sm">
-        <span className="font-medium">{titulo}</span>
-        <span className={lleno || urgente ? 'font-semibold text-rojo' : 'text-suave'}>
+      <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
+        <span className="font-semibold uppercase tracking-wide">{titulo}</span>
+        <span className={lleno || urgente ? 'font-bold text-rojo' : 'text-suave'}>
           {texto} <span className="font-normal text-suave">· {ocupados}/{total}</span>
         </span>
       </div>
@@ -26,7 +26,7 @@ export default function BarraCupos({ titulo, libres, total }) {
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={ocupados}
-        className="h-3 w-full overflow-hidden rounded-full bg-borde"
+        className="h-2 w-full overflow-hidden rounded-full bg-borde"
       >
         <div
           className={`h-full rounded-full transition-all duration-500 ${colorBarra}`}

@@ -1,21 +1,23 @@
+import { Check, Clock } from 'lucide-react'
+
 export default function MiEstado({ estado }) {
   if (!estado) return null
   const { confirmados, por_verificar, reservados } = estado
-  const plural = (n, uno, varios) => (n === 1 ? uno : varios)
+  const chip = 'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold'
   return (
-    <div className="flex flex-wrap gap-2 text-sm font-semibold">
+    <div className="flex flex-wrap gap-1.5">
       {confirmados > 0 && (
-        <span className="rounded-full border border-verde px-2.5 py-0.5 text-verde">
-          ✅ {confirmados} {plural(confirmados, 'cupo confirmado', 'cupos confirmados')}
+        <span className={`${chip} border-verde text-verde`}>
+          <Check size={13} /> {confirmados} {confirmados === 1 ? 'cupo confirmado' : 'cupos confirmados'}
         </span>
       )}
       {por_verificar > 0 && (
-        <span className="rounded-full border border-amarillo px-2.5 py-0.5 text-amarillo">
-          ⏳ {por_verificar} por verificar
+        <span className={`${chip} border-amarillo text-amarillo`}>
+          <Clock size={13} /> {por_verificar} por verificar
         </span>
       )}
       {reservados > 0 && (
-        <span className="rounded-full border border-borde px-2.5 py-0.5 text-suave">
+        <span className={`${chip} border-borde text-suave`}>
           Reservado: falta pagar ({reservados})
         </span>
       )}
