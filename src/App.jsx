@@ -87,7 +87,7 @@ function App() {
             <img src="/logo.png" alt="Fútbol LPZ" className="h-10 w-10 rounded-full" />
           </Link>
           <div className="flex-1 leading-tight">
-            <p className="font-bold">Fútbol LPZ</p>
+            <p className="font-bold">Fútbol LPZ V1.1</p>
             <p className="text-xs text-suave">Hola, {perfil?.nombre ?? '...'}</p>
           </div>
           <BotonTema />
