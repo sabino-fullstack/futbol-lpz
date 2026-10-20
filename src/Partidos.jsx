@@ -5,6 +5,7 @@ import BarraCupos from './BarraCupos'
 import ConsultarEncargado from './ConsultarEncargado'
 import MiEstado from './MiEstado'
 import { bs, rangoHora, textoEquipos, hoyBolivia, etiquetaDia, inicioPartido, quienGanaPremio } from './formato'
+import InstalarApp from './InstalarApp'
 
 export default function Partidos() {
   const [partidos, setPartidos] = useState([])
@@ -27,21 +28,19 @@ export default function Partidos() {
     const data = todos.filter((p) => inicioPartido(p).getTime() > Date.now())
     setPartidos(data)
 
-    const [conteos, me] = await Promise.all([
-      Promise.all(
-        data.map(async (p) => {
-          const j = await supabase.rpc('cupos_libres', { p_partido: p.id, p_posicion: 'jugador' })
-          const a = p.cupos_arco > 0
-            ? await supabase.rpc('cupos_libres', { p_partido: p.id, p_posicion: 'arquero' })
-            : { data: 0 }
-          return { jugador: j.data ?? 0, arquero: a.data ?? 0 }
-        })
-      ),
-      supabase.rpc('mis_estados'),
-    ])
-    const mapa = {}
-    data.forEach((p, i) => { mapa[p.id] = conteos[i] })
-    setLibres(mapa)
+    const [lib, me] = await Promise.all([
+  data.length > 0
+    ? supabase.rpc('libres_partidos', { p_ids: data.map((p) => p.id) })
+    : Promise.resolve({ data: [], error: null }),
+  supabase.rpc('mis_estados'),
+])
+if (lib.error) return setError(lib.error.message)
+
+const mapa = {}
+;(lib.data ?? []).forEach((x) => {
+  mapa[x.id_partido] = { jugador: x.libres_jugador, arquero: x.libres_arquero }
+})
+setLibres(mapa)
 
     const estados = {}
     ;(me.data ?? []).forEach((x) => { estados[x.partido_id] = x })
@@ -64,6 +63,7 @@ export default function Partidos() {
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold">Próximos partidos</h2>
+      <InstalarApp />
       {partidos.length === 0 && (
         <p className="text-suave">No hay partidos disponibles por ahora.</p>
       )}

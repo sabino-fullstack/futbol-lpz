@@ -1,4 +1,5 @@
-export async function reducirImagen(archivo, maxLado = 1280, calidad = 0.8) {
+
+export async function reducirImagen(archivo, maxLado = 960, calidad = 0.75) {
   const bmp = await createImageBitmap(archivo, { imageOrientation: 'from-image' })
   const escala = Math.min(1, maxLado / Math.max(bmp.width, bmp.height))
   const w = Math.round(bmp.width * escala)

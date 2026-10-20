@@ -14,6 +14,8 @@ import CuentaSuspendida from './CuentaSuspendida'
 import BotonTema from './BotonTema'
 import ErrorBoundary from './ErrorBoundary'
 import DetallePartido from './DetallePartido'
+import ActualizarApp from './ActualizarApp'
+import AvisoConexion from './AvisoConexion'
 
 function ScrollArriba() {
   const { pathname } = useLocation()
@@ -102,6 +104,7 @@ function App() {
             </NavLink>
           ))}
         </nav>
+        <AvisoConexion />
       </header>
 
       <main className="mx-auto max-w-xl p-4">
@@ -129,6 +132,7 @@ function App() {
         </Routes>
         </ErrorBoundary>
       </main>
+      <ActualizarApp />
     </div>
   )
 }
