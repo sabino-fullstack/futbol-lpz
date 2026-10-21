@@ -13,9 +13,42 @@
         if (localStorage.getItem('tema') !== 'claro') document.documentElement.classList.add('dark')
       } catch (e) { document.documentElement.classList.add('dark') }
     </script>
+    <style>
+      body { margin: 0; }
+      html.dark body { background: #0a0c0f; }
+      html:not(.dark) body { background: #f4f5f2; }
+      #arranque { display: grid; place-items: center; min-height: 100vh; opacity: 0; animation: aparecer 0s linear .3s forwards; }
+      #arranque .b { animation: rebote .7s ease-in-out infinite; }
+      #arranque svg { animation: giro 1.4s linear infinite; }
+      @keyframes giro { to { transform: rotate(360deg); } }
+      @keyframes rebote { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+      @keyframes aparecer { to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { #arranque .b, #arranque svg { animation: none; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="arranque" role="status" aria-label="Cargando">
+        <div class="b">
+          <svg width="56" height="56" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="46" fill="#ffffff" stroke="#12161a" stroke-width="4"/>
+            <polygon points="50,30 69.02,43.82 61.76,66.18 38.24,66.18 30.98,43.82" fill="#12161a"/>
+            <g stroke="#12161a" stroke-width="3" stroke-linecap="round" fill="none">
+              <path d="M50 30 L50 4"/><path d="M69.02 43.82 L93.75 35.78"/>
+              <path d="M61.76 66.18 L77.04 87.21"/><path d="M38.24 66.18 L22.96 87.21"/>
+              <path d="M30.98 43.82 L6.25 35.78"/>
+            </g>
+            <g fill="#12161a">
+              <polygon points="0,-7 6.66,-2.16 4.11,5.66 -4.11,5.66 -6.66,-2.16" transform="translate(71.16 20.88) rotate(-144)"/>
+              <polygon points="0,-7 6.66,-2.16 4.11,5.66 -4.11,5.66 -6.66,-2.16" transform="translate(84.24 61.12) rotate(-72)"/>
+              <polygon points="0,-7 6.66,-2.16 4.11,5.66 -4.11,5.66 -6.66,-2.16" transform="translate(50 86)"/>
+              <polygon points="0,-7 6.66,-2.16 4.11,5.66 -4.11,5.66 -6.66,-2.16" transform="translate(15.76 61.12) rotate(72)"/>
+              <polygon points="0,-7 6.66,-2.16 4.11,5.66 -4.11,5.66 -6.66,-2.16" transform="translate(28.84 20.88) rotate(144)"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

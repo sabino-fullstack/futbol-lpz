@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient'
 import Contador from './Contador'
 import { bs, inicioPartido } from './formato'
 import { useVolver } from './navegacion'
+import Cargando from './Cargando'
 
 export default function ReservarForm({ perfil }) {
   const { partidoId } = useParams()
@@ -42,7 +43,7 @@ export default function ReservarForm({ perfil }) {
     cargar()
   }, [partidoId])
 
-  if (!datos) return <p className="text-suave">Cargando...</p>
+  if (!datos) return <Cargando />
   if (datos.fallo) {
     return (
       <div className="space-y-3">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { supabase } from './supabaseClient'
-
+import Cargando from './Cargando'
 export default function MisPartidos({ perfilId }) {
   const [asignaciones, setAsignaciones] = useState([])
   const [cargado, setCargado] = useState(false)
@@ -61,7 +61,7 @@ export default function MisPartidos({ perfilId }) {
     cargar()
   }
 
-  if (!cargado && !error) return <p className="text-suave">Cargando...</p>
+  if (!cargado && !error) return <Cargando />
 
  return (
   <div className="space-y-4">

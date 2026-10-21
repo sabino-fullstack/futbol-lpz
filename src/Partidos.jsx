@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient'
 import TarjetaPartido from './TarjetaPartido'
 import InstalarApp from './InstalarApp'
 import FranjaAuspiciantes from './FranjaAuspiciantes'
+import Cargando from './Cargando'
 import { hoyBolivia, etiquetaDia, inicioPartido } from './formato'
 
 export default function Partidos() {
@@ -49,7 +50,7 @@ export default function Partidos() {
   useEffect(() => { cargar() }, [])
 
   if (error) return <p className="aviso aviso-error">Error: {error}</p>
-  if (!cargado) return <p className="text-suave">Cargando partidos...</p>
+  if (!cargado) return <Cargando texto="Cargando partidos..." />
 
   const dias = []
   partidos.forEach((p) => {
@@ -62,7 +63,6 @@ export default function Partidos() {
     <div className="space-y-4">
       <h1 className="sr-only">Próximos partidos</h1>
       <InstalarApp />
-      <FranjaAuspiciantes />
 
       {partidos.length === 0 && (
         <p className="text-suave">No hay partidos disponibles por ahora.</p>
@@ -87,6 +87,8 @@ export default function Partidos() {
           </section>
         )
       })}
+
+      <FranjaAuspiciantes />
     </div>
   )
 }

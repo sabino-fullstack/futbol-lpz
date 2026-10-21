@@ -106,3 +106,32 @@
   .cinta-pista { animation: none; width: auto; flex-wrap: wrap; }
   .cinta-copia { display: none; }
 }
+/* Animación breve al presionar botones */
+@layer base {
+  button:not([role="switch"]), .btn {
+    transition: transform .12s ease, background-color .15s ease, opacity .15s ease;
+  }
+  button:not(:disabled):active, .btn:active { transform: scale(.97); }
+}
+
+/* Balón de carga: aparece solo si la espera pasa de 0,3 s, para no parpadear */
+@keyframes giro { to { transform: rotate(360deg); } }
+@keyframes rebote { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+@keyframes aparecer { to { opacity: 1; } }
+.carga {
+  display: grid; place-items: center; gap: .6rem; padding: 3rem 0;
+  opacity: 0; animation: aparecer 0s linear .3s forwards;
+}
+.carga-pantalla { min-height: 70vh; }
+.carga-balon { animation: rebote .7s ease-in-out infinite; }
+.carga-balon svg { animation: giro 1.4s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .carga-balon, .carga-balon svg { animation: none; }
+}
+:root { --amarillo-texto: #8a5a00; }
+.dark { --amarillo-texto: #f5b82e; }
+@theme inline { --color-amarillo-texto: var(--amarillo-texto); }
+
+@layer components {
+  .btn-amarillo { background: var(--amarillo); color: #1a1300; border-color: transparent; }
+}

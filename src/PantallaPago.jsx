@@ -3,6 +3,7 @@ import { useParams } from 'react-router'
 import { supabase } from './supabaseClient'
 import { bs, fechaCorta, rangoHora } from './formato'
 import { useVolver } from './navegacion'
+import Cargando from './Cargando'
 
 
 function enlaceWhatsApp(enc, nombreJugador, partido, reservas, monto) {
@@ -74,7 +75,7 @@ export default function PantallaPago({ nombreJugador }) {
     return () => clearInterval(id)
   }, [])
 
-  if (!cargado) return <p className="text-suave">Cargando...</p>
+  if (!cargado) return <Cargando />
   if (!partido) {
     return (
       <div className="space-y-3">

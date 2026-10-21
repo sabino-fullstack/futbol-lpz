@@ -18,6 +18,7 @@ import AvisoConexion from './AvisoConexion'
 import ActualizarApp from './ActualizarApp'
 import ErrorBoundary from './ErrorBoundary'
 import CintaAvisos from './CintaAvisos'
+import Cargando from './Cargando'
 
 function ScrollArriba() {
   const { pathname } = useLocation()
@@ -66,9 +67,9 @@ function App() {
     return () => { vigente = false }
   }, [usuarioId])
 
-  if (cargando) return <p className="p-4 text-suave">Cargando...</p>
-  if (!sesion) return <PantallaAcceso />
-  if (!verificado) return <p className="p-4 text-suave">Cargando...</p>
+if (cargando) return <Cargando pantalla />
+if (!sesion) return <PantallaAcceso />
+if (!verificado) return <Cargando pantalla />
   if (perfil && perfil.activo === false) return <CuentaSuspendida />
 
   const esSuperadmin = perfil?.rol === 'superadmin'

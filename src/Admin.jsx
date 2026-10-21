@@ -49,6 +49,7 @@ export default function Admin() {
 
   async function cargar() {
     // 6 consultas y 6 variables, en el mismo orden
+    
     const [p, e, pf, c, dev, cob] = await Promise.all([
       supabase.from('partidos').select('*')
         .order('fecha', { ascending: true }).order('hora', { ascending: true }),
@@ -65,6 +66,9 @@ export default function Admin() {
     let porCobrar = []
     if (grupos.length > 0) {
       const r = await supabase.from('reservas').select('partido_id')
+  .in('grupo_id', grupos).eq('estado', 'confirmado')
+  .neq('asistencia', 'no_asistio')
+  .is('cobrado_en', null)
         .in('grupo_id', grupos).eq('estado', 'confirmado')
       if (r.error) return setError(r.error.message)
       porCobrar = r.data

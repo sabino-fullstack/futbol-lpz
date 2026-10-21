@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { supabase } from './supabaseClient'
 import { bs, rangoHora, inicioPartido, finPartido, fechaCorta } from './formato'
-
+import Cargando from './Cargando'
 function esTardia(p) {
   const limite = inicioPartido(p).getTime() - p.horas_cancelacion * 3600 * 1000
   return Date.now() > limite
@@ -100,7 +100,7 @@ export default function MisReservas({ perfilId }) {
     cargar()
   }
 
-  if (!cargado && !error) return <p className="text-suave">Cargando...</p>
+  if (!cargado && !error) return <Cargando />
 
   const ahora = Date.now()
   const proximas = grupos
