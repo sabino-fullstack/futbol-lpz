@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
+import { ChevronLeft, Clock, Info } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import Contador from './Contador'
-import { bs, inicioPartido } from './formato'
-import { useVolver } from './navegacion'
 import Cargando from './Cargando'
+import Rueda from './Rueda'
+import { bs, inicioPartido, fechaCorta, rangoHora } from './formato'
+import { useVolver } from './navegacion'
 
 export default function ReservarForm({ perfil }) {
   const { partidoId } = useParams()
@@ -48,7 +50,7 @@ export default function ReservarForm({ perfil }) {
     return (
       <div className="space-y-3">
         <p>{datos.fallo}</p>
-        <button onClick={volver}>← Volver</button>
+        <button onClick={volver} className="btn"><ChevronLeft size={18} /> Volver</button>
       </div>
     )
   }
@@ -58,7 +60,7 @@ export default function ReservarForm({ perfil }) {
     return (
       <div className="space-y-3">
         <p>Este partido ya no acepta reservas.</p>
-        <button onClick={volver}>← Volver</button>
+        <button onClick={volver} className="btn"><ChevronLeft size={18} /> Volver</button>
       </div>
     )
   }
@@ -107,96 +109,111 @@ export default function ReservarForm({ perfil }) {
     navigate(`/pago/${data}`, { replace: true })
   }
 
- return (
-  <div className="space-y-4">
-    <button onClick={volver}>← Volver</button>
+  return (
+    <div className="space-y-4">
+      <button onClick={volver} className="btn"><ChevronLeft size={18} /> Volver</button>
 
-    <div>
-      <h2 className="text-xl font-bold">{yaTengo ? 'Agregar acompañantes' : 'Reservar cupo'}</h2>
-      <p className="text-suave">
-        {partido.cancha}{partido.modalidad && ` · ${partido.modalidad}`}
-      </p>
-    </div>
+      <div className="space-y-1">
+        <h2>{yaTengo ? 'Agregar acompañantes' : 'Reservar cupo'}</h2>
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-suave">
+          <span className="font-semibold text-texto">{partido.cancha}</span>
+          {partido.modalidad && <span>{partido.modalidad}</span>}
+          <span className="flex items-center gap-1">
+            <Clock size={15} /> <span className="first-letter:uppercase">{fechaCorta(partido.fecha)}</span> · {rangoHora(partido)}
+          </span>
+        </p>
+      </div>
 
-    {perfil?.nivel === 'nuevo' && limite && (
-      <p className="aviso aviso-alerta text-sm">
-        Tu cuenta es nueva: puedes tener hasta {limite.max_cupos} cupo(s) sin confirmar a la vez.
-        Cuando se confirme tu primer pago, el límite sube.
-      </p>
-    )}
-    {perfil?.en_revision && (
-  <p className="aviso aviso-error">
-    🔎 Tu cuenta está en revisión por inasistencias. Habla con un encargado para poder reservar de nuevo.
-  </p>
-)}
-<p className="text-sm text-suave">
-  Si no vienes a un partido confirmado, queda registrada una falta. Con 2 faltas en 90 días,
-  tu cuenta queda en revisión. Si no puedes ir, cancela a tiempo.
-</p>
-    {yaTengo && (
-      <p className="aviso">Ya tienes un cupo en este partido. Aquí puedes sumar a otras personas.</p>
-    )}
-
-    <div className="tarjeta space-y-3">
-      <Contador
-        etiqueta={yaTengo ? 'Acompañantes' : 'Cupos'}
-        valor={cantidad}
-        min={1}
-        max={Math.max(1, max)}
-        onCambio={setCantidad}
-      />
-
-      {!yaTengo && (
-        <div>
-          <p className="font-semibold">Tu cupo</p>
-          {hayArco && (
-            <label className="flex items-center gap-3 py-1">
-              <input
-                type="checkbox"
-                checked={yoArquero}
-                onChange={(e) => setYoArquero(e.target.checked)}
-              />
-              Soy arquero ({bs(partido.cuota_arquero)} Bs)
-            </label>
-          )}
-        </div>
+      {perfil?.nivel === 'nuevo' && limite && (
+        <p className="aviso aviso-alerta flex gap-2 text-sm">
+          <Info size={18} className="mt-0.5 shrink-0" />
+          <span>
+            Tu cuenta es nueva: puedes tener hasta {limite.max_cupos} cupo(s) sin confirmar a la vez.
+            Cuando se confirme tu primer pago, el límite sube.
+          </span>
+        </p>
+      )}
+      {perfil?.en_revision && (
+        <p className="aviso aviso-error flex gap-2 text-sm">
+          <Info size={18} className="mt-0.5 shrink-0" />
+          <span>
+            Tu cuenta está en revisión por inasistencias. Habla con un encargado para poder reservar de nuevo.
+          </span>
+        </p>
+      )}
+      {yaTengo && (
+        <p className="aviso text-sm">Ya tienes un cupo en este partido. Aquí puedes sumar a otras personas.</p>
       )}
 
-      {Array.from({ length: faltanNombres }, (_, i) => (
-        <div key={i} className="space-y-1">
-          <input
-            className="w-full"
-            placeholder={`Nombre del acompañante ${i + 1}`}
-            value={nombres[i] ?? ''}
-            onChange={(e) => cambiarNombre(i, e.target.value)}
-          />
-          {hayArco && (
-            <label className="flex items-center gap-3 py-1">
-              <input
-                type="checkbox"
-                checked={arqueros[i] === true}
-                onChange={(e) => cambiarArquero(i, e.target.checked)}
-              />
-              Es arquero
-            </label>
-          )}
-        </div>
-      ))}
+      <div className="tarjeta space-y-3">
+        <Contador
+          etiqueta={yaTengo ? 'Acompañantes' : 'Cupos'}
+          valor={cantidad}
+          min={1}
+          max={Math.max(1, max)}
+          onCambio={setCantidad}
+        />
+
+        {!yaTengo && (
+          <div className="space-y-1">
+            <p className="font-semibold">Tu cupo</p>
+            {hayArco && (
+              <label className="flex items-center gap-3 py-1">
+                <input
+                  type="checkbox"
+                  checked={yoArquero}
+                  onChange={(e) => setYoArquero(e.target.checked)}
+                />
+                Soy arquero ({bs(partido.cuota_arquero)} Bs)
+              </label>
+            )}
+          </div>
+        )}
+
+        {Array.from({ length: faltanNombres }, (_, i) => (
+          <div key={i} className="space-y-1">
+            <input
+              className="w-full"
+              placeholder={`Nombre del acompañante ${i + 1}`}
+              value={nombres[i] ?? ''}
+              onChange={(e) => cambiarNombre(i, e.target.value)}
+            />
+            {hayArco && (
+              <label className="flex items-center gap-3 py-1">
+                <input
+                  type="checkbox"
+                  checked={arqueros[i] === true}
+                  onChange={(e) => cambiarArquero(i, e.target.checked)}
+                />
+                Es arquero
+              </label>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="tarjeta flex items-baseline justify-between">
+        <span>Total a pagar</span>
+        <span className="font-display text-3xl font-bold tabular-nums text-verde">{bs(total)} Bs</span>
+      </div>
+      {nArq > 0 && (
+        <p className="text-sm text-suave">{nJug} de jugador y {nArq} de arquero</p>
+      )}
+
+      <p className="text-sm text-suave">
+        Si no vienes a un partido confirmado, queda registrada una falta. Con 2 faltas en 90 días,
+        tu cuenta queda en revisión. Si no puedes ir, cancela a tiempo.
+      </p>
+
+      {error && <p className="aviso aviso-error">{error}</p>}
+
+      <button
+        onClick={reservar}
+        disabled={enviando || max < 1 || perfil?.en_revision}
+        className="btn btn-primario"
+      >
+        {enviando ? <><Rueda /> Reservando...</> : 'Reservar'}
+      </button>
     </div>
-
-    <div className="tarjeta flex items-baseline justify-between">
-      <span>Total a pagar</span>
-      <span className="text-2xl font-bold text-verde">{bs(total)} Bs</span>
-    </div>
-    {nArq > 0 && (
-      <p className="text-sm text-suave">{nJug} de jugador y {nArq} de arquero</p>
-    )}
-
-    {error && <p className="aviso aviso-error">{error}</p>}
-
-    <button onClick={reservar} disabled={enviando || max < 1 || perfil?.en_revision} className="btn btn-primario">
-      {enviando ? 'Reservando...' : 'Reservar'}
-    </button>
-  </div>
-)
+  )
 }

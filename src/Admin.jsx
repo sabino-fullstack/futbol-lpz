@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router'
+import { NavLink, Navigate, useParams, useSearchParams } from 'react-router'
 import { supabase } from './supabaseClient'
 import Interruptor from './Interruptor'
 import Canchas from './Canchas'
 import Cuentas from './Cuentas'
+import Formatos from './Formatos'
 import FormularioPartido from './FormularioPartido'
 import { bs, rangoHora, textoEquipos, finPartido, enlaceCambio } from './formato'
-import Formatos from './Formatos'
 
 const SECCIONES = [['partidos', 'Partidos'], ['canchas', 'Canchas'], ['formatos', 'Formatos'], ['cuentas', 'Cuentas']]
 
@@ -42,54 +42,25 @@ export default function Admin() {
   const [canchas, setCanchas] = useState([])
   const [error, setError] = useState(null)
   const [pasadosVisibles, setPasadosVisibles] = useState(10)
-  const [pendientes, setPendientes] = useState({})
   const [creando, setCreando] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
   const [aviso, setAviso] = useState(null)
 
   async function cargar() {
-    // 6 consultas y 6 variables, en el mismo orden
-    
-    const [p, e, pf, c, dev, cob] = await Promise.all([
+    // 4 consultas y 4 variables, en el mismo orden
+    const [p, e, pf, c] = await Promise.all([
       supabase.from('partidos').select('*')
         .order('fecha', { ascending: true }).order('hora', { ascending: true }),
       supabase.from('encargados').select('id, partido_id, cuota_bonificada, perfiles(nombre, apellido, whatsapp)'),
       supabase.from('perfiles').select('id, nombre, apellido, whatsapp').eq('activo', true).order('nombre'),
-      supabase.from('canchas').select('id, nombre, enlace_maps, foto_url').order('nombre'),
-      supabase.from('reservas').select('partido_id').eq('devolucion_estado', 'pendiente'),
-      supabase.from('pagos').select('grupo_id').eq('metodo', 'cancha').eq('estado', 'pendiente'),
+      supabase.from('canchas').select('id, nombre, enlace_maps, foto_url, direccion, referencia, recomendaciones').order('nombre'),
     ])
-    const fallo = p.error || e.error || pf.error || c.error || dev.error || cob.error
+    const fallo = p.error || e.error || pf.error || c.error
     if (fallo) return setError(fallo.message)
-
-    const grupos = cob.data.map((x) => x.grupo_id)
-    let porCobrar = []
-    if (grupos.length > 0) {
-      const r = await supabase.from('reservas').select('partido_id')
-  .in('grupo_id', grupos).eq('estado', 'confirmado')
-  .neq('asistencia', 'no_asistio')
-  .is('cobrado_en', null)
-        .in('grupo_id', grupos).eq('estado', 'confirmado')
-      if (r.error) return setError(r.error.message)
-      porCobrar = r.data
-    }
-
-    const pend = {}
-    const sumar = (id, campo) => {
-      pend[id] = pend[id] ?? { cobros: 0, devoluciones: 0 }
-      pend[id][campo] += 1
-    }
-    dev.data.forEach((x) => sumar(x.partido_id, 'devoluciones'))
-    porCobrar.forEach((x) => sumar(x.partido_id, 'cobros'))
-    const r = await supabase.from('reservas').select('partido_id')
-  .in('grupo_id', grupos).eq('estado', 'confirmado')
-  .neq('asistencia', 'no_asistio')
-
     setPartidos(p.data)
     setEncargados(e.data)
     setPerfiles(pf.data)
     setCanchas(c.data)
-    setPendientes(pend)
   }
 
   useEffect(() => { cargar() }, [])
@@ -119,9 +90,9 @@ export default function Admin() {
       p_cuota_arquero: fila.cuota_arquero,
       p_equipos: fila.equipos,
       p_formato_juego: fila.formato_juego,
-p_premio: fila.premio,
-p_premio_para: fila.premio_para,
-p_notas: fila.notas,
+      p_premio: fila.premio,
+      p_premio_para: fila.premio_para,
+      p_notas: fila.notas,
     })
     if (error) return error.message
     setEditandoId(null)
@@ -195,10 +166,7 @@ p_notas: fila.notas,
   const cancelados = partidos.filter((p) => p.estado === 'cancelado')
   const vivos = partidos.filter((p) => p.estado !== 'cancelado')
   const proximos = vivos.filter((p) => finPartido(p).getTime() >= ahora)
-  const pasados = vivos
-    .filter((p) => finPartido(p).getTime() < ahora)
-    .reverse()
-  const hayPendientePasado = pasados.some((p) => pendientes[p.id])
+  const pasados = vivos.filter((p) => finPartido(p).getTime() < ahora).reverse()
   const partidoAviso = aviso ? partidos.find((x) => x.id === aviso.partidoId) : null
 
   const lista = filtro === 'proximos'
@@ -213,7 +181,7 @@ p_notas: fila.notas,
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">Administración</h2>
+      <h2>Administración</h2>
       {error && <p className="aviso aviso-error">{error}</p>}
 
       <nav className="flex flex-wrap gap-2">
@@ -265,25 +233,18 @@ p_notas: fila.notas,
           <nav className="flex flex-wrap gap-2">
             {[
               ['proximos', `Próximos (${proximos.length})`],
-              ['pasados', `Pasados (${pasados.length})${hayPendientePasado ? ' ⚠️' : ''}`],
+              ['pasados', `Pasados (${pasados.length})`],
               ['cancelados', `Cancelados (${cancelados.length})`],
             ].map(([id, texto]) => (
               <button
                 key={id}
                 onClick={() => setParams({ ver: id }, { replace: true })}
-                className={filtro === id ? 'border-transparent bg-verde text-white' : ''}
+                className={filtro === id ? 'border-transparent bg-verde text-sobre-verde' : ''}
               >
                 {texto}
               </button>
             ))}
           </nav>
-
-          {filtro === 'pasados' && hayPendientePasado && (
-            <p className="aviso aviso-alerta text-sm">
-              ⚠️ Hay partidos pasados con cobros en cancha o devoluciones sin resolver.
-              Ábrelos con "Gestionar lista".
-            </p>
-          )}
 
           {lista.length === 0 && <p className="text-suave">No hay partidos en esta sección.</p>}
 
@@ -317,19 +278,8 @@ p_notas: fila.notas,
                     : ' · Sin cupos de arco'}
                   {textoEquipos(p) && ` · ${textoEquipos(p)}`}
                 </p>
-                {pendientes[p.id]?.cobros > 0 && (
-                  <p className="text-sm font-semibold text-amarillo">
-                    ⚠️ {pendientes[p.id].cobros} cupo(s) por cobrar en cancha
-                  </p>
-                )}
-                {pendientes[p.id]?.devoluciones > 0 && (
-                  <p className="text-sm font-semibold text-amarillo">
-                    ⚠️ {pendientes[p.id].devoluciones} devolución(es) pendiente(s)
-                  </p>
-                )}
 
                 <div className="flex flex-wrap gap-2">
-                  <Link to={`/admin/partidos/${p.id}`} className="btn">Gestionar lista</Link>
                   {p.estado !== 'cancelado' && (
                     <button onClick={() => { setAviso(null); setEditandoId(p.id) }}>Editar</button>
                   )}
@@ -373,8 +323,8 @@ p_notas: fila.notas,
       )}
 
       {seccion === 'canchas' && <Canchas canchas={canchas} onCambio={cargar} />}
-      {seccion === 'cuentas' && <Cuentas />}
       {seccion === 'formatos' && <Formatos />}
+      {seccion === 'cuentas' && <Cuentas />}
     </div>
   )
 }

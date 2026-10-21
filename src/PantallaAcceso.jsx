@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { registrar, entrar } from './auth'
+import Rueda from './Rueda'
 
 function traducir(msg = '') {
   if (msg.includes('Invalid login credentials')) return 'El número o la contraseña no son correctos.'
@@ -43,8 +45,10 @@ export default function PantallaAcceso() {
   return (
     <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
       <div className="flex flex-col items-center gap-2">
-        <img src="/logo.png" alt="Fútbol LPZ" className="h-28 w-28 rounded-full" />
-        <h1 className="text-2xl font-bold">Fútbol LPZ</h1>
+        <img src="/icon-192.png" alt="" className="h-24 w-24 rounded-full" />
+        <h1 className="font-display text-4xl font-extrabold uppercase leading-none tracking-wide">
+          Fútbol <span className="text-verde">LPZ</span>
+        </h1>
         <p className="text-suave">{creando ? 'Crea tu cuenta' : 'Entra a tu cuenta'}</p>
       </div>
 
@@ -66,26 +70,37 @@ export default function PantallaAcceso() {
         inputMode="numeric" autoComplete="username"
         value={numero} onChange={(e) => setNumero(e.target.value)} />
 
-      <div className="flex gap-2">
-        <input className={campo} placeholder="Contraseña (mínimo 6)"
+      <div className="relative">
+        <input
+          className={`${campo} pr-14`}
+          placeholder="Contraseña (mínimo 6)"
           type={verClave ? 'text' : 'password'}
           autoComplete={creando ? 'new-password' : 'current-password'}
-          value={contrasena} onChange={(e) => setContrasena(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && enviar()} />
-        <button type="button" onClick={() => setVerClave(!verClave)}>
-          {verClave ? 'Ocultar' : 'Ver'}
+          value={contrasena}
+          onChange={(e) => setContrasena(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && enviar()}
+        />
+        <button
+          type="button"
+          onClick={() => setVerClave(!verClave)}
+          aria-label={verClave ? 'Ocultar contraseña' : 'Ver contraseña'}
+          className="btn btn-icono absolute right-1.5 top-1/2 -translate-y-1/2 border-0 bg-transparent"
+        >
+          {verClave ? <EyeOff size={20} /> : <Eye size={20} />}
         </button>
       </div>
 
-      {error && <p className="rounded-xl border border-rojo p-3 text-rojo">{error}</p>}
+      {error && <p className="aviso aviso-error">{error}</p>}
 
-      <button onClick={enviar} disabled={cargando}
-        className="w-full rounded-xl border-0 bg-verde py-4 text-lg font-bold text-white">
-        {cargando ? 'Un momento...' : creando ? 'Crear cuenta' : 'Entrar'}
+      <button onClick={enviar} disabled={cargando} className="btn btn-primario">
+        {cargando ? <><Rueda /> Un momento...</> : creando ? 'Crear cuenta' : 'Entrar'}
       </button>
 
-      <button type="button" onClick={() => { setError(null); setModo(creando ? 'entrar' : 'crear') }}
-        className="border-0 bg-transparent text-base text-verde underline">
+      <button
+        type="button"
+        onClick={() => { setError(null); setModo(creando ? 'entrar' : 'crear') }}
+        className="border-0 bg-transparent text-base text-verde underline"
+      >
         {creando ? 'Ya tengo cuenta' : 'Soy nuevo, crear cuenta'}
       </button>
     </div>

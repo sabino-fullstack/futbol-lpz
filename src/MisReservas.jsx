@@ -1,11 +1,28 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
+import { Info, MapPin, QrCode } from 'lucide-react'
 import { supabase } from './supabaseClient'
-import { bs, rangoHora, inicioPartido, finPartido, fechaCorta } from './formato'
 import Cargando from './Cargando'
+import Etiqueta, { BORDE_IZQ, colorDeEstado } from './EtiquetaEstado'
+import { bs, rangoHora, inicioPartido, finPartido, fechaCorta } from './formato'
+
 function esTardia(p) {
   const limite = inicioPartido(p).getTime() - p.horas_cancelacion * 3600 * 1000
   return Date.now() > limite
+}
+
+// Estado de una reserva desde el punto de vista del jugador
+function claveGrupo(g) {
+  if (g.filas.some((f) => f.estado === 'confirmado')) {
+    if (g.pago?.metodo === 'cancha') {
+      const pendientes = g.filas.some((f) => f.estado === 'confirmado' && !f.cobrado_en)
+      return pendientes ? 'jug_cancha' : 'confirmado'
+    }
+    return 'confirmado'
+  }
+  if (g.pago?.estado === 'por_verificar') return 'por_verificar'
+  if (new Date(g.filas[0].vencimiento).getTime() <= Date.now()) return 'vencido'
+  return g.pago?.estado === 'rechazado' ? 'rechazado' : 'reservado'
 }
 
 export default function MisReservas({ perfilId }) {
@@ -13,18 +30,18 @@ export default function MisReservas({ perfilId }) {
   const [cargado, setCargado] = useState(false)
   const [error, setError] = useState(null)
   const [aviso, setAviso] = useState(null)
-  const [cuenta, setCuenta] = useState({ faltas: 0, revision: false })  
+  const [cuenta, setCuenta] = useState({ faltas: 0, revision: false })
 
   async function cargar() {
     const [r, p] = await Promise.all([
       supabase.from('reservas')
-        .select('id, grupo_id, estado, vencimiento, nombre_invitado, posicion, precio, partidos(id, cancha, fecha, hora, hora_fin, cuota, horas_cancelacion, canchas(enlace_maps))')
+        .select('id, grupo_id, estado, vencimiento, nombre_invitado, posicion, precio, cobrado_en, partidos(id, cancha, fecha, hora, hora_fin, cuota, horas_cancelacion, canchas(enlace_maps))')
         .eq('creada_por', perfilId)
         .neq('estado', 'cancelado')
         .order('created_at', { ascending: false }),
       supabase.from('pagos')
-        .select('grupo_id, estado, metodo')
-        .in('estado', ['por_verificar', 'verificado']),
+        .select('grupo_id, estado, metodo, created_at')
+        .order('created_at', { ascending: true }),
     ])
     const fallo = r.error || p.error
     if (fallo) return setError(fallo.message)
@@ -37,33 +54,28 @@ export default function MisReservas({ perfilId }) {
       porGrupo[fila.grupo_id].filas.push(fila)
     })
     const pagos = {}
-    p.data.forEach((x) => { pagos[x.grupo_id] = x })
+    p.data.forEach((x) => { pagos[x.grupo_id] = x }) // el último pago de cada grupo es el que manda
 
     setGrupos(Object.values(porGrupo).map((g) => ({ ...g, pago: pagos[g.grupoId] })))
     setCargado(true)
   }
 
   useEffect(() => { cargar() }, [])
-  useEffect(() => {
-  Promise.all([
-    supabase.rpc('mis_faltas'),
-    supabase.from('perfiles').select('en_revision').eq('id', perfilId).single(),
-  ]).then(([f, p]) => setCuenta({ faltas: f.data ?? 0, revision: p.data?.en_revision === true }))
-}, [perfilId])
 
-  function estadoDe(g) {
-    if (g.pago?.estado === 'verificado') return { texto: '✅ Cupo confirmado', clase: 'text-verde', puedePagar: false }
-    if (g.pago?.estado === 'por_verificar') return { texto: '⏳ Pago por verificar', clase: 'text-amarillo', puedePagar: true }
-    const vigente = new Date(g.filas[0].vencimiento) > new Date()
-    return vigente
-      ? { texto: 'Reservado, falta pagar', clase: 'text-amarillo', puedePagar: true }
-      : { texto: 'Venció (el cupo se liberó)', clase: 'text-suave', puedePagar: false }
-  }
+  useEffect(() => {
+    Promise.all([
+      supabase.rpc('mis_faltas'),
+      supabase.from('perfiles').select('en_revision').eq('id', perfilId).single(),
+    ]).then(([f, p]) => setCuenta({ faltas: f.data ?? 0, revision: p.data?.en_revision === true }))
+  }, [perfilId])
 
   async function cancelar(fila, g) {
     setError(null)
     setAviso(null)
-    const pagado = !!g.pago && g.pago.metodo !== 'bonificado'
+const pagado = g.pago?.metodo === 'cancha'
+  ? !!fila.cobrado_en
+  : !!g.pago && g.pago.metodo !== 'bonificado'
+    && ['por_verificar', 'verificado'].includes(g.pago.estado)
     const tardia = esTardia(g.partido)
     const horas = g.partido.horas_cancelacion
 
@@ -111,34 +123,39 @@ export default function MisReservas({ perfilId }) {
     .sort((a, b) => inicioPartido(b.partido) - inicioPartido(a.partido))
 
   function tarjeta(g) {
-    const est = estadoDe(g)
+    const clave = claveGrupo(g)
     const yaEmpezo = inicioPartido(g.partido) <= new Date()
+    const verPago = ['por_verificar', 'reservado', 'rechazado', 'jug_cancha'].includes(clave)
     return (
-      <div key={g.grupoId} className="tarjeta space-y-2">
-        <div>
-          <h3 className="text-lg font-bold">{g.partido.cancha}</h3>
-          <p className="text-suave first-letter:uppercase">
+      <div key={g.grupoId} className={`tarjeta space-y-2.5 border-l-4 ${BORDE_IZQ[colorDeEstado(clave)]}`}>
+        <div className="space-y-1">
+          <h3 className="text-xl">{g.partido.cancha}</h3>
+          <p className="text-sm text-suave first-letter:uppercase">
             {fechaCorta(g.partido.fecha)} · {rangoHora(g.partido)}
           </p>
+          <Etiqueta clave={clave} />
         </div>
-        <p className={`text-lg font-semibold ${est.clase}`}>{est.texto}</p>
 
         <ul className="space-y-2">
           {g.filas.map((f) => (
-            <li key={f.id} className="flex items-center justify-between gap-2">
+            <li key={f.id} className="flex items-center justify-between gap-2 border-t border-borde pt-2">
               <span>
-                {f.nombre_invitado ?? 'Yo'}{f.posicion === 'arquero' && ' 🧤'}
+                {f.nombre_invitado ?? 'Yo'}{f.posicion === 'arquero' && ' (arquero)'}
               </span>
               {!yaEmpezo && <button onClick={() => cancelar(f, g)}>Cancelar</button>}
             </li>
           ))}
         </ul>
 
-        <div className="flex flex-wrap gap-2 pt-1">
-          {est.puedePagar && <Link to={`/pago/${g.grupoId}`} className="btn btn-activo">Ver pago</Link>}
+        <div className="flex flex-wrap gap-2">
+          {verPago && (
+            <Link to={`/pago/${g.grupoId}`} className="btn btn-activo">
+              <QrCode size={18} /> Ver pago
+            </Link>
+          )}
           {g.partido.canchas?.enlace_maps && (
             <a href={g.partido.canchas.enlace_maps} target="_blank" rel="noreferrer" className="btn">
-              📍 Cómo llegar
+              <MapPin size={18} /> Cómo llegar
             </a>
           )}
         </div>
@@ -148,19 +165,25 @@ export default function MisReservas({ perfilId }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">Mis reservas</h2>
+      <h2>Mis reservas</h2>
       {cuenta.revision && (
-  <p className="aviso aviso-error">
-    🔎 Tu cuenta está en revisión por inasistencias. No puedes reservar hasta que un encargado
-    la apruebe: escríbele por WhatsApp.
-  </p>
-)}
-{!cuenta.revision && cuenta.faltas === 1 && (
-  <p className="aviso aviso-alerta">
-    Tienes 1 inasistencia en los últimos 90 días. Con la segunda, tu cuenta quedará en revisión.
-    Si no puedes ir, cancela tu cupo a tiempo.
-  </p>
-)}
+        <p className="aviso aviso-error flex gap-2">
+          <Info size={18} className="mt-0.5 shrink-0" />
+          <span>
+            Tu cuenta está en revisión por inasistencias. No puedes reservar hasta que un encargado
+            la apruebe: escríbele por WhatsApp.
+          </span>
+        </p>
+      )}
+      {!cuenta.revision && cuenta.faltas === 1 && (
+        <p className="aviso aviso-alerta flex gap-2">
+          <Info size={18} className="mt-0.5 shrink-0" />
+          <span>
+            Tienes 1 inasistencia en los últimos 90 días. Con la segunda, tu cuenta quedará en revisión.
+            Si no puedes ir, cancela tu cupo a tiempo.
+          </span>
+        </p>
+      )}
       {error && <p className="aviso aviso-error">{error}</p>}
       {aviso && <p className="aviso aviso-ok">{aviso}</p>}
 

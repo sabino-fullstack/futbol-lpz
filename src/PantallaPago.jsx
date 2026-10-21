@@ -1,193 +1,967 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router'
+import { useSearchParams } from 'react-router'
+import {
+  Banknote, Check, ChevronDown, ChevronLeft, Hand, MessageCircle, RefreshCw, RotateCcw,
+  Search, UserCheck, UserX,
+} from 'lucide-react'
 import { supabase } from './supabaseClient'
-import { bs, fechaCorta, rangoHora } from './formato'
-import { useVolver } from './navegacion'
+import Contador from './Contador'
 import Cargando from './Cargando'
+import { EstadoCorto, BORDE_IZQ } from './EtiquetaEstado'
+import { claveCupo } from './estados'
+import {
+  bs, nombreCompleto, enlaceDevolucion, inicioPartido, finPartido, sinTildes,
+} from './formato'
 
+const ETIQUETA_DEVOLUCION = {
+  pendiente: 'Devolución pendiente',
+  no_corresponde: 'Sin devolución (dinero retenido)',
+  hecha: 'Devuelto',
+}
+const PESTANAS = [['jugadores', 'Jugadores'], ['asistencia', 'Asistencia'], ['dinero', 'Dinero']]
+const ORDEN_ASIST = { pendiente: 0, asistio: 1, no_asistio: 2 }
+const nombreDe = (r) => r.nombre_invitado || nombreCompleto(r.perfil) || 'Jugador'
 
-function enlaceWhatsApp(enc, nombreJugador, partido, reservas, monto) {
-  const fecha = new Date(partido.fecha + 'T00:00:00').toLocaleDateString('es-BO', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  })
-  const nJug = reservas.filter((r) => r.posicion === 'jugador').length
-  const nArq = reservas.filter((r) => r.posicion === 'arquero').length
-  const detalle = [
-    nJug > 0 && `${nJug} de jugador`,
-    nArq > 0 && `${nArq} de ARQUERO`,
-  ].filter(Boolean).join(' y ')
-
-  const mensaje =
-    `Hola, soy ${nombreJugador}. ` +
-    `Pagué ${bs(monto)} Bs por ${reservas.length} cupo(s) (${detalle}) ` +
-    `para el partido en ${partido.cancha}, ${fecha} a las ${partido.hora.slice(0, 5)}.`
-  const numero = enc.perfiles.whatsapp.replace(/\D/g, '')
-  return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`
+function colorGrupo(claves) {
+  if (claves.some((c) => c === 'por_verificar' || c === 'cancha_debe')) return 'amarillo'
+  if (claves.includes('rechazado')) return 'rojo'
+  if (claves.some((c) => c === 'reservado' || c === 'vencido')) return 'gris'
+  return 'verde'
 }
 
-export default function PantallaPago({ nombreJugador }) {
-  const { grupoId } = useParams()
-  const volver = useVolver('/reservas')
+function Filtros({ opciones, valor, onCambio }) {
+  return (
+    <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
+      {opciones.map(([id, texto, n]) => (
+        <button
+          key={id}
+          onClick={() => onCambio(id)}
+          aria-pressed={valor === id}
+          className={`shrink-0 whitespace-nowrap ${
+            valor === id ? 'border-transparent bg-verde text-sobre-verde' : ''
+          }`}
+        >
+          {texto} <span className="opacity-70">{n}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
 
+function Buscador({ valor, onCambio, placeholder }) {
+  return (
+    <div className="relative">
+      <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-suave" />
+      <input
+        className="w-full pl-10"
+        placeholder={placeholder}
+        value={valor}
+        onChange={(e) => onCambio(e.target.value)}
+      />
+    </div>
+  )
+}
+
+export default function PanelPartido({ partidoId, perfilId, onVolver }) {
+  const [params, setParams] = useSearchParams()
   const [partido, setPartido] = useState(null)
-  const [encargados, setEncargados] = useState([])
   const [reservas, setReservas] = useState([])
-  const [pago, setPago] = useState(null)
-  const [cargado, setCargado] = useState(false)
+  const [pagos, setPagos] = useState([])
+  const [libres, setLibres] = useState({ jugador: 0, arquero: 0 })
+  const [faltas, setFaltas] = useState({})
+  const [miBonificado, setMiBonificado] = useState(false)
   const [error, setError] = useState(null)
-  const [ahora, setAhora] = useState(Date.now())
+  const [aviso, setAviso] = useState(null)
+  const [trabajando, setTrabajando] = useState(false)
+  const [abierto, setAbierto] = useState(null) // fila o grupo desplegado
+
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroA, setFiltroA] = useState('todos')
+  const [filtroJ, setFiltroJ] = useState('todos')
+
+  const [cantidad, setCantidad] = useState(1)
+  const [nombres, setNombres] = useState([])
+  const [arqs, setArqs] = useState([])
+  const [metodo, setMetodo] = useState('qr')
+  const [aConvertir, setAConvertir] = useState(1)
+
+  const alternar = (id) => setAbierto((a) => (a === id ? null : id))
 
   async function cargar() {
-    const [r, p] = await Promise.all([
+    // 7 consultas y 7 variables, en el mismo orden
+    const [p, r, pg, lj, la, enc, fa] = await Promise.all([
+      supabase.from('partidos').select('*').eq('id', partidoId).single(),
       supabase.from('reservas')
-        .select('id, estado, vencimiento, posicion, precio, partidos(*)')
-        .eq('grupo_id', grupoId),
+        .select('id, grupo_id, perfil_id, estado, vencimiento, nombre_invitado, posicion, precio, asistencia, cobrado_en, cobro_tipo, cancelada_en, cancelacion_tipo, monto_pagado, devolucion_estado, perfil:perfiles!perfil_id(id, nombre, apellido, apodo, en_revision), creador:perfiles!creada_por(id, nombre, apellido, apodo, whatsapp, nivel, rechazos_seguidos, en_revision)')
+        .eq('partido_id', partidoId)
+        .order('created_at', { ascending: true }),
       supabase.from('pagos')
-        .select('estado')
-        .eq('grupo_id', grupoId)
-        .in('estado', ['por_verificar', 'verificado'])
-        .maybeSingle(),
+        .select('grupo_id, metodo, estado, monto')
+        .order('created_at', { ascending: true }),
+      supabase.rpc('cupos_libres', { p_partido: partidoId, p_posicion: 'jugador' }),
+      supabase.rpc('cupos_libres', { p_partido: partidoId, p_posicion: 'arquero' }),
+      supabase.from('encargados')
+        .select('cuota_bonificada')
+        .eq('perfil_id', perfilId)
+        .eq('partido_id', partidoId),
+      supabase.rpc('faltas_partido', { p_partido: partidoId }),
     ])
-    if (r.error || p.error) {
-      setError('No pudimos cargar esta reserva.')
-      return setCargado(true)
-    }
-    const part = r.data[0]?.partidos ?? null
-    let encs = []
-    if (part) {
-      const e = await supabase.from('encargados')
-        .select('id, qr_url, perfiles(nombre, whatsapp)')
-        .eq('partido_id', part.id)
-      if (e.error) setError(e.error.message)
-      else encs = e.data
-    }
-    setPartido(part)
-    setReservas(r.data.filter((x) => x.estado !== 'cancelado'))
-    setPago(p.data)
-    setEncargados(encs)
-    setCargado(true)
+    const fallo = p.error || r.error || pg.error || lj.error || la.error || enc.error || fa.error
+    if (fallo) return setError(fallo.message)
+    const mapa = {}
+    ;(fa.data ?? []).forEach((x) => { mapa[x.perfil] = x })
+    setPartido(p.data)
+    setReservas(r.data)
+    setPagos(pg.data)
+    setLibres({ jugador: lj.data ?? 0, arquero: la.data ?? 0 })
+    setMiBonificado(enc.data.some((e) => e.cuota_bonificada))
+    setFaltas(mapa)
   }
 
-  useEffect(() => { cargar() }, [grupoId])
+  useEffect(() => { cargar() }, [partidoId])
 
-  useEffect(() => {
-    const id = setInterval(() => setAhora(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [])
+  async function ejecutar(fn, args, pregunta) {
+    if (pregunta && !window.confirm(pregunta)) return false
+    setError(null)
+    setAviso(null)
+    setTrabajando(true)
+    const { error } = await supabase.rpc(fn, args)
+    setTrabajando(false)
+    if (error) { setError(error.message); return false }
+    await cargar()
+    return true
+  }
 
-  if (!cargado) return <Cargando />
+  async function marcar(r, valor) {
+    setError(null)
+    setAviso(null)
+    if (valor === 'no_asistio' && r.perfil_id && r.asistencia !== 'no_asistio') {
+      const previas = faltas[r.perfil_id]?.propias ?? 0
+      if (previas + 1 >= 2 && !window.confirm(
+        `Esta sería la falta número ${previas + 1} de esta cuenta en 90 días: quedará en revisión ` +
+        `y no podrá reservar hasta que un encargado la apruebe. ¿Confirmas la falta?`
+      )) return
+    }
+    setTrabajando(true)
+    const { data, error } = await supabase.rpc('marcar_asistencia', { p_reserva: r.id, p_valor: valor })
+    setTrabajando(false)
+    if (error) return setError(error.message)
+    if (data?.revision) setAviso(`La cuenta de ${nombreDe(r)} quedó en revisión por faltas reiteradas.`)
+    await cargar()
+  }
+
+  // tipo: 'cancha' (cobro el día del partido) o 'adelantado' (ya pagó antes)
+  function cobrar(r, valor, tipo = 'cancha') {
+    return ejecutar(
+      'cobrar_cupo',
+      { p_reserva: r.id, p_cobrado: valor, p_tipo: tipo },
+      valor ? null : `¿Deshacer el pago de ${nombreDe(r)}?`
+    )
+  }
+
+  function reasignar(fila) {
+    const nuevo = window.prompt('Nombre de la persona que ocupará este cupo:')
+    if (nuevo && nuevo.trim()) {
+      ejecutar('reasignar_cupo', { p_reserva: fila.id, p_nuevo_nombre: nuevo })
+    }
+  }
+
+  async function marcarDevueltas(items) {
+    const total = items.reduce((s, r) => s + Number(r.monto_pagado), 0)
+    if (!window.confirm(`¿Ya devolviste ${bs(total)} Bs?`)) return
+    setError(null)
+    setTrabajando(true)
+    for (const r of items) {
+      const { error } = await supabase.rpc('marcar_devolucion_hecha', { p_reserva: r.id })
+      if (error) { setError(error.message); break }
+    }
+    setTrabajando(false)
+    await cargar()
+  }
+
   if (!partido) {
     return (
       <div className="space-y-3">
-        <p>{error ?? 'No encontramos esta reserva. Puede que no sea tuya.'}</p>
-        <button onClick={volver}>← Volver</button>
+        <button onClick={onVolver} className="btn"><ChevronLeft size={18} /> Volver</button>
+        {error ? <p className="aviso aviso-error">{error}</p> : <Cargando />}
       </div>
     )
   }
 
-  const cantidad = reservas.length
-  const monto = reservas.reduce((suma, r) => suma + Number(r.precio), 0)
-  const nArq = reservas.filter((r) => r.posicion === 'arquero').length
+  const hayArco = partido.cupos_arco > 0
+  const ahora = Date.now()
+  const inicio = inicioPartido(partido).getTime()
+  const fin = finPartido(partido).getTime()
+  const comenzo = ahora >= inicio
+  const puedeAsistio = ahora >= inicio - 60 * 60 * 1000
+  const enJuego = puedeAsistio && ahora <= fin + 72 * 3600 * 1000
 
-  async function avisar(enc) {
-    setError(null)
-    const { error } = await supabase.rpc('avisar_pago', {
-      p_grupo: grupoId,
-      p_encargado: enc.id,
-    })
-    if (error) return setError(error.message)
-    window.location.href = enlaceWhatsApp(enc, nombreJugador, partido, reservas, monto)
+  const tabParam = params.get('tab')
+  const tab = PESTANAS.some(([id]) => id === tabParam) ? tabParam : (enJuego ? 'asistencia' : 'jugadores')
+
+  const pagoDe = {}
+  pagos.forEach((x) => { pagoDe[x.grupo_id] = x })
+
+  const activas = reservas.filter((r) => r.estado !== 'cancelado')
+  const canceladas = reservas.filter((r) => r.estado === 'cancelado' && r.cancelada_en)
+  const clave = (r) => claveCupo(r, pagoDe[r.grupo_id], ahora)
+
+  const gruposMapa = {}
+  activas.forEach((r) => {
+    if (!gruposMapa[r.grupo_id]) {
+      gruposMapa[r.grupo_id] = { grupoId: r.grupo_id, filas: [], pago: pagoDe[r.grupo_id] }
+    }
+    gruposMapa[r.grupo_id].filas.push(r)
+  })
+  const grupos = Object.values(gruposMapa)
+
+  const confirmados = activas.filter((r) => r.estado === 'confirmado')
+  const porVerificar = activas.filter((r) => clave(r) === 'por_verificar')
+  const pendientes = activas.filter((r) => clave(r) === 'reservado' || clave(r) === 'rechazado')
+  const conArq = (lista) => {
+    const a = lista.filter((r) => r.posicion === 'arquero').length
+    return a > 0 ? `${lista.length} (${a} arq.)` : `${lista.length}`
   }
 
-  const vencimiento = reservas[0]?.vencimiento
-  const segundos = vencimiento
-    ? Math.floor((new Date(vencimiento).getTime() - ahora) / 1000)
-    : 0
-  const mm = String(Math.max(0, Math.floor(segundos / 60))).padStart(2, '0')
-  const ss = String(Math.max(0, segundos % 60)).padStart(2, '0')
+  const q = sinTildes(busqueda.trim())
+  const coincideTexto = (r) =>
+    !q || sinTildes(`${nombreDe(r)} ${nombreCompleto(r.creador)}`).includes(q)
 
- return (
-  <div className="space-y-4">
-    <button onClick={volver}>← Volver</button>
+  // Observaciones de una persona (faltas, revisión), en texto corto
+  const observaciones = (r) => {
+    const out = []
+    const propias = r.perfil_id ? (faltas[r.perfil_id]?.propias ?? 0) : 0
+    if (propias > 0) out.push(`${propias} falta${propias > 1 ? 's' : ''} (90 días)`)
+    if (r.perfil?.en_revision) out.push('En revisión')
+    const dAc = !r.perfil_id && r.creador ? (faltas[r.creador.id]?.acompanantes ?? 0) : 0
+    if (dAc > 0) out.push(`Su grupo: ${dAc} falta${dAc > 1 ? 's' : ''}`)
+    return out
+  }
 
-    <div>
-      <h2 className="text-xl font-bold">{partido.cancha}</h2>
-      <p className="text-suave first-letter:uppercase">
-        {fechaCorta(partido.fecha)} · {rangoHora(partido)}
-      </p>
-    </div>
-
-    {error && <p className="aviso aviso-error">{error}</p>}
-    {cantidad === 0 && <p className="aviso">Esta reserva ya no está activa.</p>}
-
-    {cantidad > 0 && pago?.estado === 'verificado' && (
-      <p className="aviso aviso-ok text-lg font-semibold">✅ Tu cupo está confirmado.</p>
-    )}
-
-    {cantidad > 0 && pago?.estado === 'por_verificar' && (
-      <div className="space-y-3">
-        <p className="aviso aviso-alerta text-lg font-semibold">
-          ⏳ Avisaste tu pago. El encargado lo está revisando.
+  // Quién reservó, con sus acciones (se despliega al tocar)
+  const infoCreador = (creador) =>
+    creador ? (
+      <div className="space-y-1.5">
+        <p>
+          Reservó: <strong>{nombreCompleto(creador)}</strong>
+          <span className="text-suave"> · {creador.nivel === 'confiable' ? 'Confiable' : 'Cuenta nueva'}</span>
         </p>
-        <button onClick={cargar}>Actualizar estado</button>
-      </div>
-    )}
-
-    {cantidad > 0 && !pago && (
-      <div className="space-y-4">
-        <div className="tarjeta text-center">
-          <p className="text-suave">Total a pagar</p>
-          <p className="text-4xl font-bold text-verde">{bs(monto)} Bs</p>
-          <p className="text-suave">
-            {cantidad} cupo(s){nArq > 0 && ` · ${nArq} de arquero`}
-          </p>
-          {segundos > 0 ? (
-            <p className={`mt-2 text-xl font-bold ${segundos <= 120 ? 'text-rojo' : 'text-amarillo'}`}>
-              ⏱ {mm}:{ss}
-            </p>
-          ) : (
-            <p className="aviso aviso-error mt-2">
-              La reserva venció. Si ya pagaste, escríbele al encargado.
-            </p>
+        {creador.en_revision && (
+          <p className="font-semibold text-amarillo-texto">Cuenta en revisión por faltas</p>
+        )}
+        {creador.rechazos_seguidos >= 2 && (
+          <p className="font-semibold text-rojo">{creador.rechazos_seguidos} pagos rechazados</p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {creador.whatsapp && (
+            <a href={`https://wa.me/${creador.whatsapp}`} target="_blank" rel="noreferrer" className="btn">
+              <MessageCircle size={16} /> WhatsApp
+            </a>
+          )}
+          {creador.nivel === 'nuevo' && (
+            <button
+              disabled={trabajando}
+              onClick={() => ejecutar('aprobar_cuenta',
+                { p_perfil: creador.id, p_confiable: true },
+                '¿Marcar esta cuenta como confiable? Tendrá límites más amplios.')}
+            >
+              Marcar confiable
+            </button>
+          )}
+          {(creador.rechazos_seguidos >= 2 || creador.en_revision) && (
+            <button
+              disabled={trabajando}
+              onClick={() => ejecutar('aprobar_cuenta',
+                { p_perfil: creador.id, p_confiable: false },
+                '¿Quitar las restricciones de esta cuenta (pagos rechazados o revisión por faltas)?')}
+            >
+              Quitar restricciones
+            </button>
           )}
         </div>
+      </div>
+    ) : (
+      <p className="text-suave">Agregado por el encargado</p>
+    )
 
-        <ol className="list-decimal space-y-1 pl-6 text-lg">
-          <li>Paga con el QR de un encargado.</li>
-          <li>Toca "Ya pagué".</li>
-          <li>En WhatsApp, adjunta la captura de tu pago y envía.</li>
-        </ol>
+  // ---------- Asistencia ----------
+  const filas = confirmados.map((r) => ({ r, c: clave(r) }))
+  const debe = (f) => f.c === 'cancha_debe' && f.r.asistencia !== 'no_asistio'
+  const porCobrar = filas.filter(debe)
+  const montoPorCobrar = porCobrar.reduce((s, f) => s + Number(f.r.precio), 0)
+  const nAsistio = filas.filter((f) => f.r.asistencia === 'asistio').length
+  const nFalto = filas.filter((f) => f.r.asistencia === 'no_asistio').length
+  const sinMarcar = filas.filter((f) => f.r.asistencia === 'pendiente')
 
-        {encargados.length === 0 && <p className="aviso">Este partido aún no tiene encargado.</p>}
+  const cumpleA = (f) => {
+    if (filtroA === 'sin_marcar') return f.r.asistencia === 'pendiente'
+    if (filtroA === 'asistio') return f.r.asistencia === 'asistio'
+    if (filtroA === 'falto') return f.r.asistencia === 'no_asistio'
+    if (filtroA === 'debe') return debe(f)
+    if (filtroA === 'arqueros') return f.r.posicion === 'arquero'
+    return true
+  }
+  const visiblesA = filas
+    .filter((f) => cumpleA(f) && coincideTexto(f.r))
+    .sort((a, b) =>
+      ORDEN_ASIST[a.r.asistencia] - ORDEN_ASIST[b.r.asistencia] ||
+      nombreDe(a.r).localeCompare(nombreDe(b.r), 'es'))
 
-        {encargados.map((enc) => (
-          <div key={enc.id} className="tarjeta space-y-3">
-            <h4 className="text-lg font-bold">{enc.perfiles?.nombre}</h4>
-            {enc.qr_url ? (
-              <img
-                src={enc.qr_url}
-                alt={`QR de ${enc.perfiles?.nombre}`}
-                className="mx-auto w-64 max-w-full rounded-lg bg-white p-2"
-              />
-            ) : (
-              <p className="aviso aviso-alerta">Este encargado aún no subió su QR.</p>
-            )}
-            <button
-              onClick={() => avisar(enc)}
-              disabled={segundos <= 0}
-              className="btn btn-primario"
-            >
-              Ya pagué, avisar a {enc.perfiles?.nombre}
-            </button>
-          </div>
-        ))}
+  // ---------- Jugadores ----------
+  const cumpleJ = (c) => {
+    if (filtroJ === 'por_verificar') return c === 'por_verificar'
+    if (filtroJ === 'debe') return c === 'cancha_debe'
+    if (filtroJ === 'qr') return c === 'qr' || c === 'adelantado'
+    if (filtroJ === 'reservado') return c === 'reservado' || c === 'rechazado'
+    return true
+  }
+  const nJ = (fn) => activas.filter((r) => fn(clave(r))).length
+  const gruposVisibles = grupos.filter(
+    (g) =>
+      g.filas.some((f) => cumpleJ(clave(f))) &&
+      (!q || g.filas.some(coincideTexto))
+  )
 
+  const hayDinero = (g, f) =>
+    g.pago?.metodo === 'cancha'
+      ? !!f.cobrado_en
+      : g.pago && g.pago.metodo !== 'bonificado'
+        && ['por_verificar', 'verificado'].includes(g.pago.estado)
+
+  const yaTengoCupo = activas.some((r) => r.perfil_id === perfilId && r.estado === 'confirmado')
+
+  // ---------- Dinero ----------
+  const idsGrupos = new Set(reservas.map((r) => r.grupo_id))
+  const cobradoQR = pagos
+    .filter((x) => idsGrupos.has(x.grupo_id) && x.estado === 'verificado' && x.metodo === 'qr')
+    .reduce((s, x) => s + Number(x.monto), 0)
+  const cobradoAntes = reservas
+    .filter((r) => r.cobrado_en && r.cobro_tipo === 'adelantado')
+    .reduce((s, r) => s + Number(r.precio), 0)
+  const cobradoCancha = reservas
+    .filter((r) => r.cobrado_en && r.cobro_tipo !== 'adelantado')
+    .reduce((s, r) => s + Number(r.precio), 0)
+  const cobrado = cobradoQR + cobradoAntes + cobradoCancha
+  const sumaDevolucion = (estado) => canceladas
+    .filter((r) => r.devolucion_estado === estado)
+    .reduce((s, r) => s + Number(r.monto_pagado), 0)
+  const devHechas = sumaDevolucion('hecha')
+  const devPendientes = sumaDevolucion('pendiente')
+  const retenido = sumaDevolucion('no_corresponde')
+  const neto = cobrado - devHechas
+
+  const porPersona = {}
+  canceladas
+    .filter((r) => r.devolucion_estado === 'pendiente')
+    .forEach((r) => {
+      const k = r.creador?.id ?? 'manual'
+      if (!porPersona[k]) porPersona[k] = { creador: r.creador, items: [] }
+      porPersona[k].items.push(r)
+    })
+  const gruposDev = Object.values(porPersona)
+  const otrasCanc = canceladas.filter((r) => r.devolucion_estado !== 'pendiente')
+
+  // ---------- Agregar jugadores ----------
+  const marcas = Array.from({ length: cantidad }, (_, i) => hayArco && arqs[i] === true)
+  const nArq = marcas.filter(Boolean).length
+  const nJug = cantidad - nArq
+  const totalAgregar = nJug * partido.cuota + nArq * partido.cuota_arquero
+  const maxAgregar = Math.max(1, Math.min(10, libres.jugador + libres.arquero))
+
+  async function agregar() {
+    const lista = Array.from({ length: cantidad }, (_, i) => (nombres[i] ?? '').trim())
+    if (lista.some((n) => n === '')) return setError('Escribe el nombre de cada jugador')
+    if (nJug > libres.jugador) return setError(`Solo quedan ${libres.jugador} cupo(s) de jugador`)
+    if (nArq > libres.arquero) return setError(`Solo quedan ${libres.arquero} cupo(s) de arquero`)
+    const ok = await ejecutar('agregar_jugadores', {
+      p_partido: partidoId, p_nombres: lista, p_metodo: metodo, p_arqueros: marcas,
+    })
+    if (ok) { setCantidad(1); setNombres([]); setArqs([]) }
+  }
+
+  const convertir = Math.min(aConvertir, Math.max(1, libres.arquero))
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <button onClick={onVolver} className="btn"><ChevronLeft size={18} /> Volver</button>
+        <button onClick={cargar} aria-label="Actualizar" className="btn btn-icono">
+          <RefreshCw size={18} />
+        </button>
+      </div>
+
+      <div className="space-y-1">
+        <h2 className="text-2xl">{partido.cancha}</h2>
+        <p className="text-suave">{partido.fecha} · {partido.hora.slice(0, 5)}</p>
         <p className="text-sm text-suave">
-          Puedes cancelar hasta {partido.horas_cancelacion} horas antes del partido y coordinar
-          tu devolución. Después de ese plazo no hay devolución.
+          Jugadores: {libres.jugador} libres de {partido.cupos} ({bs(partido.cuota)} Bs)
+          {hayArco && ` · Arqueros: ${libres.arquero} libres de ${partido.cupos_arco} (${bs(partido.cuota_arquero)} Bs)`}
+        </p>
+        <p className="text-sm">
+          {conArq(confirmados)} confirmados · {conArq(porVerificar)} por verificar · {conArq(pendientes)} pendientes
         </p>
       </div>
-    )}
-  </div>
-)
+
+      {error && <p className="aviso aviso-error">{error}</p>}
+      {aviso && <p className="aviso aviso-alerta">{aviso}</p>}
+      {trabajando && <p className="text-sm text-suave">Procesando...</p>}
+
+      <nav className="flex flex-wrap gap-2">
+        {PESTANAS.map(([id, texto]) => (
+          <button
+            key={id}
+            onClick={() => setParams({ tab: id }, { replace: true })}
+            className={tab === id ? 'border-transparent bg-verde text-sobre-verde' : ''}
+          >
+            {texto}
+          </button>
+        ))}
+      </nav>
+
+      {/* ===================== JUGADORES ===================== */}
+      {tab === 'jugadores' && (
+        <div className="space-y-3">
+          {miBonificado && !yaTengoCupo && (
+            <button
+              disabled={trabajando}
+              className="btn btn-activo"
+              onClick={() => ejecutar('tomar_cupo_bonificado', { p_partido: partidoId })}
+            >
+              Tomar mi cupo bonificado
+            </button>
+          )}
+
+          <Buscador valor={busqueda} onCambio={setBusqueda} placeholder="Buscar jugador por nombre o apodo" />
+          <Filtros
+            valor={filtroJ}
+            onCambio={setFiltroJ}
+            opciones={[
+              ['todos', 'Todos', activas.length],
+              ['por_verificar', 'Por verificar', nJ((c) => c === 'por_verificar')],
+              ['debe', 'Debe en cancha', nJ((c) => c === 'cancha_debe')],
+              ['qr', 'Pagó (QR/antes)', nJ((c) => c === 'qr' || c === 'adelantado')],
+              ['reservado', 'Sin pago', nJ((c) => c === 'reservado' || c === 'rechazado')],
+            ]}
+          />
+
+          {grupos.length === 0 && <p className="text-suave">Todavía no hay reservas.</p>}
+          {grupos.length > 0 && gruposVisibles.length === 0 && (
+            <p className="text-suave">No hay jugadores con ese filtro.</p>
+          )}
+
+          {gruposVisibles.map((g) => {
+            const creador = g.filas[0].creador
+            const claves = g.filas.map(clave)
+            const sinCobrar = g.filas.filter((f) => clave(f) === 'cancha_debe')
+            const montoSinCobrar = sinCobrar.reduce((s, f) => s + Number(f.precio), 0)
+            const debenG = sinCobrar.filter((f) => f.asistencia !== 'no_asistio')
+            const montoDeben = debenG.reduce((s, f) => s + Number(f.precio), 0)
+            const porVer = g.pago?.estado === 'por_verificar'
+            const sinConfirmar = !g.filas.some((f) => f.estado === 'confirmado')
+            const conCabecera =
+              g.filas.length > 1 || (creador && g.filas[0].perfil_id !== creador.id)
+            const idG = `g${g.grupoId}`
+            const mostrarBarra =
+              porVer || sinCobrar.length > 1 || (debenG.length > 1 && comenzo) || (sinConfirmar && !porVer)
+
+            return (
+              <div
+                key={g.grupoId}
+                className={`tarjeta overflow-hidden border-l-4 p-0 ${BORDE_IZQ[colorGrupo(claves)]}`}
+              >
+                {conCabecera && (
+                  <div className="border-b border-borde bg-borde/30">
+                    <button
+                      type="button"
+                      onClick={() => alternar(idG)}
+                      aria-expanded={abierto === idG}
+                      className="flex min-h-0 w-full items-center gap-2 rounded-none border-0 bg-transparent px-3 py-1.5 text-left text-sm"
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        {creador ? (
+                          <>Reservó <strong>{nombreCompleto(creador)}</strong>
+                            <span className="text-suave"> · {g.filas.length} cupo(s)</span></>
+                        ) : (
+                          <>Agregado por el encargado <span className="text-suave">· {g.filas.length} cupo(s)</span></>
+                        )}
+                      </span>
+                      {creador?.rechazos_seguidos >= 2 && (
+                        <span className="text-xs font-semibold text-rojo">{creador.rechazos_seguidos} rechazos</span>
+                      )}
+                      {creador?.en_revision && (
+                        <span className="text-xs font-semibold text-amarillo-texto">revisión</span>
+                      )}
+                      <ChevronDown
+                        size={16}
+                        className={`shrink-0 text-suave transition-transform ${abierto === idG ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {abierto === idG && <div className="px-3 pb-2 text-sm">{infoCreador(creador)}</div>}
+                  </div>
+                )}
+
+                <ul className="divide-y divide-borde">
+                  {g.filas.map((f) => {
+                    const c = clave(f)
+                    return (
+                      <li key={f.id} className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => alternar(f.id)}
+                            aria-expanded={abierto === f.id}
+                            className="min-h-0 min-w-0 flex-1 border-0 bg-transparent p-0 text-left"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <span className="truncate font-semibold">{nombreDe(f)}</span>
+                              {f.posicion === 'arquero' && (
+                                <Hand size={14} className="shrink-0 text-suave" aria-label="Arquero" />
+                              )}
+                              <span className="shrink-0 text-xs tabular-nums text-suave">{bs(f.precio)} Bs</span>
+                            </span>
+                            <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                              <EstadoCorto clave={c} />
+                              {f.asistencia === 'asistio' && <EstadoCorto clave="asistio" />}
+                              {f.asistencia === 'no_asistio' && <EstadoCorto clave="falto" />}
+                              {observaciones(f).map((o) => (
+                                <span key={o} className="text-xs font-semibold text-amarillo-texto">{o}</span>
+                              ))}
+                            </span>
+                          </button>
+
+                          {c === 'cancha_debe' && (
+                            <button
+                              disabled={trabajando}
+                              className="btn btn-amarillo min-h-9 shrink-0 px-2.5 text-sm"
+                              onClick={() => cobrar(f, true, 'adelantado')}
+                            >
+                              <Check size={16} /> Ya pagó
+                            </button>
+                          )}
+                          <ChevronDown
+                            size={16}
+                            className={`shrink-0 text-suave transition-transform ${abierto === f.id ? 'rotate-180' : ''}`}
+                          />
+                        </div>
+
+                        {abierto === f.id && (
+                          <div className="mt-2 space-y-2 border-t border-borde pt-2 text-sm">
+                            {!conCabecera && infoCreador(creador)}
+                            <div className="flex flex-wrap gap-2">
+                              <button disabled={trabajando} onClick={() => reasignar(f)}>Reasignar</button>
+                              {hayDinero(g, f) ? (
+                                <>
+                                  <button
+                                    disabled={trabajando}
+                                    onClick={() => ejecutar('liberar_cupo',
+                                      { p_reserva: f.id, p_devolver: true },
+                                      `¿Liberar este cupo y dejar pendiente la devolución de ${bs(f.precio)} Bs?`)}
+                                  >
+                                    Liberar y devolver
+                                  </button>
+                                  <button
+                                    disabled={trabajando}
+                                    onClick={() => ejecutar('liberar_cupo',
+                                      { p_reserva: f.id, p_devolver: false },
+                                      '¿Liberar este cupo SIN devolver el dinero?')}
+                                  >
+                                    Liberar sin devolución
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  disabled={trabajando}
+                                  onClick={() => ejecutar('liberar_cupo',
+                                    { p_reserva: f.id, p_devolver: false },
+                                    '¿Liberar este cupo?')}
+                                >
+                                  Liberar
+                                </button>
+                              )}
+                              {(c === 'adelantado' || c === 'cancha_cobrado') && (
+                                <button disabled={trabajando} onClick={() => cobrar(f, false)}>
+                                  <RotateCcw size={14} /> Deshacer pago
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+
+                {mostrarBarra && (
+                  <div className="flex flex-wrap items-center gap-2 border-t border-borde px-3 py-2">
+                    {porVer && (
+                      <>
+                        <span className="w-full text-sm font-semibold">
+                          Verificar pago: {bs(g.pago.monto)} Bs
+                        </span>
+                        <button
+                          disabled={trabajando}
+                          className="btn btn-activo"
+                          onClick={() => ejecutar('confirmar_pago', { p_grupo: g.grupoId })}
+                        >
+                          <Check size={16} /> Confirmar
+                        </button>
+                        <button
+                          disabled={trabajando}
+                          onClick={() => ejecutar('rechazar_pago', { p_grupo: g.grupoId },
+                            `¿Rechazar este pago? La persona tendrá otros ${partido.minutos_reserva} minutos para volver a intentarlo.`)}
+                        >
+                          Rechazar
+                        </button>
+                      </>
+                    )}
+
+                    {sinCobrar.length > 1 && (
+                      <button
+                        disabled={trabajando}
+                        className="btn btn-amarillo"
+                        onClick={() => ejecutar('cobrar_en_cancha',
+                          { p_grupo: g.grupoId, p_tipo: 'adelantado' },
+                          `¿Ya pagaron antes los ${sinCobrar.length} cupos de este grupo (${bs(montoSinCobrar)} Bs)?`)}
+                      >
+                        <Check size={16} /> Ya pagaron todos ({bs(montoSinCobrar)} Bs)
+                      </button>
+                    )}
+
+                    {debenG.length > 1 && comenzo && (
+                      <button
+                        disabled={trabajando}
+                        className="btn btn-amarillo"
+                        onClick={() => ejecutar('cobrar_en_cancha',
+                          { p_grupo: g.grupoId, p_tipo: 'cancha' },
+                          `¿Ya cobraste ${bs(montoDeben)} Bs en cancha a los ${debenG.length} cupos de este grupo que asistieron?`)}
+                      >
+                        <Banknote size={16} /> Cobrar a todos ({bs(montoDeben)} Bs)
+                      </button>
+                    )}
+
+                    {sinConfirmar && !porVer && (
+                      <button
+                        disabled={trabajando}
+                        onClick={() => ejecutar('cambiar_a_cancha', { p_grupo: g.grupoId },
+                          '¿Pasar esta reserva a pago en cancha? El cupo quedará confirmado.')}
+                      >
+                        Pasar a pago en cancha
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          <div className="tarjeta space-y-3">
+            <h3>Agregar jugadores</h3>
+            <Contador etiqueta="Cantidad" valor={cantidad} min={1} max={maxAgregar} onCambio={setCantidad} />
+            {Array.from({ length: cantidad }, (_, i) => (
+              <div key={i} className="space-y-1">
+                <input
+                  className="w-full"
+                  placeholder={`Nombre del jugador ${i + 1}`}
+                  value={nombres[i] ?? ''}
+                  onChange={(e) => {
+                    const copia = [...nombres]
+                    copia[i] = e.target.value
+                    setNombres(copia)
+                  }}
+                />
+                {hayArco && (
+                  <label className="flex items-center gap-3 py-1">
+                    <input
+                      type="checkbox"
+                      checked={arqs[i] === true}
+                      onChange={(e) => {
+                        const copia = [...arqs]
+                        copia[i] = e.target.checked
+                        setArqs(copia)
+                      }}
+                    />
+                    Arquero
+                  </label>
+                )}
+              </div>
+            ))}
+            <select value={metodo} onChange={(e) => setMetodo(e.target.value)}>
+              <option value="qr">Ya pagó (por QR)</option>
+              <option value="cancha">Pagará en cancha</option>
+            </select>
+            <p className="font-semibold">
+              Total: {bs(totalAgregar)} Bs{nArq > 0 && ` (${nJug} jugador y ${nArq} arquero)`}
+            </p>
+            <button
+              disabled={trabajando || (libres.jugador + libres.arquero) < 1}
+              className="btn btn-activo"
+              onClick={agregar}
+            >
+              Agregar
+            </button>
+          </div>
+
+          {hayArco && (
+            <div className="tarjeta space-y-3">
+              <h3>Cupos de arco</h3>
+              <p>{libres.arquero} libre(s) de {partido.cupos_arco}</p>
+              {libres.arquero > 0 ? (
+                <>
+                  <p className="text-sm text-suave">
+                    Si no hay arqueros suficientes, convierte los cupos de arco libres en
+                    cupos de jugador. No se puede deshacer.
+                  </p>
+                  <Contador
+                    etiqueta="Convertir"
+                    valor={convertir}
+                    min={1}
+                    max={libres.arquero}
+                    onCambio={setAConvertir}
+                  />
+                  <button
+                    disabled={trabajando}
+                    onClick={async () => {
+                      const ok = await ejecutar('convertir_cupos_arco',
+                        { p_partido: partidoId, p_cantidad: convertir },
+                        `¿Convertir ${convertir} cupo(s) de arco libre(s) en cupos de jugador? No se puede deshacer.`)
+                      if (ok) setAConvertir(1)
+                    }}
+                  >
+                    Convertir en cupos de jugador
+                  </button>
+                </>
+              ) : (
+                <p className="text-suave">Todos los cupos de arco están ocupados.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===================== ASISTENCIA ===================== */}
+      {tab === 'asistencia' && (
+        <div className="space-y-3">
+          <div className="tarjeta flex justify-around py-2 text-center">
+            <div><p className="text-xl font-bold text-verde">{nAsistio}</p><p className="text-xs text-suave">Asistieron</p></div>
+            <div><p className="text-xl font-bold text-rojo">{nFalto}</p><p className="text-xs text-suave">Faltaron</p></div>
+            <div><p className="text-xl font-bold">{sinMarcar.length}</p><p className="text-xs text-suave">Sin marcar</p></div>
+          </div>
+
+          <div className={`aviso flex items-center gap-2 py-2 ${porCobrar.length > 0 ? 'aviso-alerta' : 'aviso-ok'}`}>
+            <Banknote size={18} className="shrink-0" />
+            <p className="text-sm font-semibold">
+              {porCobrar.length > 0
+                ? `Por cobrar: ${porCobrar.length} cupo(s) · ${bs(montoPorCobrar)} Bs`
+                : 'No hay cobros pendientes en cancha'}
+            </p>
+          </div>
+
+          {!puedeAsistio && (
+            <p className="aviso aviso-alerta text-sm">
+              La asistencia se puede marcar desde 1 hora antes del partido, y las faltas desde su inicio.
+            </p>
+          )}
+
+          <Buscador valor={busqueda} onCambio={setBusqueda} placeholder="Buscar jugador por nombre o apodo" />
+          <Filtros
+            valor={filtroA}
+            onCambio={setFiltroA}
+            opciones={[
+              ['todos', 'Todos', filas.length],
+              ['sin_marcar', 'Sin marcar', sinMarcar.length],
+              ['asistio', 'Asistió', nAsistio],
+              ['falto', 'Faltó', nFalto],
+              ['debe', 'Debe pagar', porCobrar.length],
+              ...(hayArco ? [['arqueros', 'Arqueros', filas.filter((f) => f.r.posicion === 'arquero').length]] : []),
+            ]}
+          />
+
+          <button
+            disabled={trabajando || !comenzo || sinMarcar.length === 0}
+            onClick={() => ejecutar(
+              'marcar_asistieron_pendientes',
+              { p_partido: partidoId },
+              `¿Marcar como "asistió" a los ${sinMarcar.length} jugadores que quedaron sin marcar?`
+            )}
+          >
+            Marcar que asistieron los {sinMarcar.length} sin marcar
+          </button>
+
+          {confirmados.length === 0 && <p className="text-suave">Todavía no hay cupos confirmados.</p>}
+          {confirmados.length > 0 && visiblesA.length === 0 && (
+            <p className="text-suave">No hay jugadores con ese filtro o búsqueda.</p>
+          )}
+
+          {visiblesA.length > 0 && (
+            <ul className="divide-y divide-borde overflow-hidden rounded-xl border border-borde bg-tarjeta">
+              {visiblesA.map((f) => {
+                const { r, c } = f
+                const claveAsist = r.asistencia === 'asistio' ? 'asistio'
+                  : r.asistencia === 'no_asistio' ? 'falto' : 'sin_marcar'
+                const colorBorde = debe(f) ? 'amarillo'
+                  : claveAsist === 'asistio' ? 'verde'
+                  : claveAsist === 'falto' ? 'rojo' : 'gris'
+                const asistio = r.asistencia === 'asistio'
+                const falto = r.asistencia === 'no_asistio'
+                return (
+                  <li key={r.id} className={`border-l-4 px-3 py-2 ${BORDE_IZQ[colorBorde]}`}>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => alternar(r.id)}
+                        aria-expanded={abierto === r.id}
+                        className="min-h-0 min-w-0 flex-1 border-0 bg-transparent p-0 text-left"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <span className="truncate font-semibold">{nombreDe(r)}</span>
+                          {r.posicion === 'arquero' && (
+                            <Hand size={14} className="shrink-0 text-suave" aria-label="Arquero" />
+                          )}
+                        </span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                          <EstadoCorto clave={c} />
+                          <EstadoCorto clave={claveAsist} />
+                          {observaciones(r).map((o) => (
+                            <span key={o} className="text-xs font-semibold text-amarillo-texto">{o}</span>
+                          ))}
+                        </span>
+                      </button>
+
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                          aria-label={asistio ? 'Quitar asistencia' : 'Marcar asistió'}
+                          aria-pressed={asistio}
+                          disabled={trabajando || (!asistio && !puedeAsistio)}
+                          className={`h-10 w-10 rounded-full p-0 ${asistio ? 'border-transparent bg-verde text-sobre-verde' : ''}`}
+                          onClick={() => marcar(r, asistio ? 'pendiente' : 'asistio')}
+                        >
+                          <UserCheck size={18} className="mx-auto" />
+                        </button>
+                        <button
+                          aria-label={falto ? 'Quitar falta' : 'Marcar faltó'}
+                          aria-pressed={falto}
+                          disabled={trabajando || (!falto && !comenzo)}
+                          className={`h-10 w-10 rounded-full p-0 ${falto ? 'border-transparent bg-rojo text-white' : ''}`}
+                          onClick={() => marcar(r, falto ? 'pendiente' : 'no_asistio')}
+                        >
+                          <UserX size={18} className="mx-auto" />
+                        </button>
+                        {debe(f) && (
+                          <button
+                            disabled={trabajando || !comenzo}
+                            aria-label={`Cobrar ${bs(r.precio)} Bs`}
+                            className="btn btn-amarillo h-10 px-2.5"
+                            onClick={() => cobrar(r, true)}
+                          >
+                            <Banknote size={16} /> {bs(r.precio)}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {abierto === r.id && (
+                      <div className="mt-2 space-y-2 border-t border-borde pt-2 text-sm">
+                        <p className="text-suave">{bs(r.precio)} Bs · {r.posicion === 'arquero' ? 'Arquero' : 'Jugador'}</p>
+                        {infoCreador(r.creador)}
+                        {(c === 'adelantado' || c === 'cancha_cobrado') && (
+                          <button disabled={trabajando} onClick={() => cobrar(r, false)}>
+                            <RotateCcw size={14} /> Deshacer pago
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* ===================== DINERO ===================== */}
+      {tab === 'dinero' && (
+        <div className="space-y-4">
+          <h3>Devoluciones pendientes</h3>
+          {gruposDev.length === 0 && <p className="text-suave">No hay devoluciones pendientes.</p>}
+          {gruposDev.map((g) => {
+            const total = g.items.reduce((s, r) => s + Number(r.monto_pagado), 0)
+            return (
+              <div key={g.creador?.id ?? 'manual'} className="tarjeta space-y-2 border-l-4 border-l-amarillo">
+                <p className="text-lg font-bold">{bs(total)} Bs · {g.items.length} cupo(s)</p>
+                <p>
+                  {g.creador
+                    ? `Devolver a: ${nombreCompleto(g.creador)}`
+                    : 'Cupo agregado a mano: coordina la devolución directamente con la persona.'}
+                </p>
+                <ul className="text-sm text-suave">
+                  {g.items.map((r) => (
+                    <li key={r.id}>
+                      {nombreDe(r)}{r.posicion === 'arquero' && ' (arquero)'} · {bs(r.monto_pagado)} Bs
+                      {' · '}{r.cancelacion_tipo === 'tardia' ? 'cancelación tardía' : 'a tiempo'}
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  {g.creador?.whatsapp && (
+                    <a
+                      className="btn btn-activo"
+                      target="_blank"
+                      rel="noreferrer"
+                      href={enlaceDevolucion(g.creador, total, partido)}
+                    >
+                      <MessageCircle size={16} /> Contactar por WhatsApp
+                    </a>
+                  )}
+                  <button disabled={trabajando} onClick={() => marcarDevueltas(g.items)}>
+                    Marcar devuelto
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+
+          <h3>Otras cancelaciones</h3>
+          {otrasCanc.length === 0 && <p className="text-suave">No hay otras cancelaciones.</p>}
+          {otrasCanc.map((r) => (
+            <div key={r.id} className="tarjeta space-y-1.5 border-l-4 border-l-rojo">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold">{nombreDe(r)}</span>
+                {r.posicion === 'arquero' && <Hand size={16} className="text-suave" aria-label="Arquero" />}
+                <EstadoCorto clave="cancelado" />
+              </div>
+              <p className="text-sm text-suave">
+                {r.cancelacion_tipo === 'tardia' ? 'Cancelación tardía' : 'Cancelación a tiempo'}
+                {' · '}
+                {r.devolucion_estado
+                  ? `${bs(r.monto_pagado)} Bs · ${ETIQUETA_DEVOLUCION[r.devolucion_estado]}`
+                  : 'sin pago'}
+              </p>
+              {r.devolucion_estado === 'no_corresponde' && (
+                <button
+                  disabled={trabajando}
+                  onClick={() => ejecutar('marcar_devolucion_hecha', { p_reserva: r.id }, '¿Ya devolviste este dinero?')}
+                >
+                  Marcar devolución hecha
+                </button>
+              )}
+            </div>
+          ))}
+
+          <div className="tarjeta space-y-1">
+            <h3>Resumen de dinero</h3>
+            <p>Cobrado por QR: {bs(cobradoQR)} Bs</p>
+            <p>Pagado antes del partido: {bs(cobradoAntes)} Bs</p>
+            <p>Cobrado en cancha: {bs(cobradoCancha)} Bs</p>
+            <p>Devoluciones hechas: − {bs(devHechas)} Bs</p>
+            <p className="text-lg font-bold">Neto recibido: {bs(neto)} Bs</p>
+            <p>Devoluciones pendientes: {bs(devPendientes)} Bs (aún por devolver)</p>
+            <p>Neto si se devuelve todo lo pendiente: {bs(neto - devPendientes)} Bs</p>
+            <p className="text-sm text-suave">
+              Retenido por cancelaciones tardías: {bs(retenido)} Bs (ya está dentro del neto)
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

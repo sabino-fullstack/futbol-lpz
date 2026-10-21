@@ -76,7 +76,7 @@ if (!verificado) return <Cargando pantalla />
   const tabs = [
     ['/partidos', 'Partidos', CalendarDays],
     ['/reservas', 'Mis reservas', Ticket],
-    esEncargado && ['/a-cargo', 'A mi cargo', ClipboardList],
+    (esEncargado || esSuperadmin) && ['/a-cargo', 'A mi cargo', ClipboardList],
     esSuperadmin && ['/admin', 'Admin', Settings],
   ].filter(Boolean)
 
@@ -117,16 +117,15 @@ if (!verificado) return <Cargando pantalla />
             <Route path="/pago/:grupoId" element={<PantallaPago nombreJugador={perfil?.nombre ?? ''} />} />
             <Route path="/reservas" element={<MisReservas perfilId={usuarioId} />} />
 
-            {esEncargado && <Route path="/a-cargo" element={<MisPartidos perfilId={usuarioId} />} />}
-            {esEncargado && (
-              <Route path="/a-cargo/:partidoId" element={<PanelRuta perfilId={usuarioId} volverA="/a-cargo" />} />
-            )}
+{(esEncargado || esSuperadmin) && (
+  <Route path="/a-cargo" element={<MisPartidos perfilId={usuarioId} esSuperadmin={esSuperadmin} />} />
+)}
+{(esEncargado || esSuperadmin) && (
+  <Route path="/a-cargo/:partidoId" element={<PanelRuta perfilId={usuarioId} volverA="/a-cargo" />} />
+)}
 
-            {esSuperadmin && <Route path="/admin" element={<Navigate to="/admin/partidos" replace />} />}
-            {esSuperadmin && (
-              <Route path="/admin/partidos/:partidoId" element={<PanelRuta perfilId={usuarioId} volverA="/admin/partidos" />} />
-            )}
-            {esSuperadmin && <Route path="/admin/:seccion" element={<Admin />} />}
+{esSuperadmin && <Route path="/admin" element={<Navigate to="/admin/partidos" replace />} />}
+{esSuperadmin && <Route path="/admin/:seccion" element={<Admin />} />}
 
             <Route path="*" element={<Navigate to="/partidos" replace />} />
           </Routes>

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import {
-  Banknote, ChevronLeft, Hand, MessageCircle, RefreshCw, RotateCcw, Search, UserCheck, UserX,
+  Banknote, Check, ChevronDown, ChevronLeft, Hand, MessageCircle, RefreshCw, RotateCcw,
+  Search, UserCheck, UserX,
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import Contador from './Contador'
 import Cargando from './Cargando'
-import Etiqueta, { BORDE_IZQ } from './EtiquetaEstado'
+import { EstadoCorto, BORDE_IZQ } from './EtiquetaEstado'
 import { claveCupo } from './estados'
 import {
   bs, nombreCompleto, enlaceDevolucion, inicioPartido, finPartido, sinTildes,
@@ -72,6 +73,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   const [error, setError] = useState(null)
   const [aviso, setAviso] = useState(null)
   const [trabajando, setTrabajando] = useState(false)
+  const [abierto, setAbierto] = useState(null) // fila o grupo desplegado
 
   const [busqueda, setBusqueda] = useState('')
   const [filtroA, setFiltroA] = useState('todos')
@@ -83,12 +85,14 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   const [metodo, setMetodo] = useState('qr')
   const [aConvertir, setAConvertir] = useState(1)
 
+  const alternar = (id) => setAbierto((a) => (a === id ? null : id))
+
   async function cargar() {
     // 7 consultas y 7 variables, en el mismo orden
     const [p, r, pg, lj, la, enc, fa] = await Promise.all([
       supabase.from('partidos').select('*').eq('id', partidoId).single(),
       supabase.from('reservas')
-        .select('id, grupo_id, perfil_id, estado, vencimiento, nombre_invitado, posicion, precio, asistencia, cobrado_en, cancelada_en, cancelacion_tipo, monto_pagado, devolucion_estado, perfil:perfiles!perfil_id(id, nombre, apellido, apodo, en_revision), creador:perfiles!creada_por(id, nombre, apellido, apodo, whatsapp, nivel, rechazos_seguidos, en_revision)')
+        .select('id, grupo_id, perfil_id, estado, vencimiento, nombre_invitado, posicion, precio, asistencia, cobrado_en, cobro_tipo, cancelada_en, cancelacion_tipo, monto_pagado, devolucion_estado, perfil:perfiles!perfil_id(id, nombre, apellido, apodo, en_revision), creador:perfiles!creada_por(id, nombre, apellido, apodo, whatsapp, nivel, rechazos_seguidos, en_revision)')
         .eq('partido_id', partidoId)
         .order('created_at', { ascending: true }),
       supabase.from('pagos')
@@ -146,11 +150,12 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
     await cargar()
   }
 
-  function cobrar(r, valor) {
+  // tipo: 'cancha' (cobro el día del partido) o 'adelantado' (ya pagó antes)
+  function cobrar(r, valor, tipo = 'cancha') {
     return ejecutar(
       'cobrar_cupo',
-      { p_reserva: r.id, p_cobrado: valor },
-      valor ? null : `¿Deshacer el cobro de ${nombreDe(r)}?`
+      { p_reserva: r.id, p_cobrado: valor, p_tipo: tipo },
+      valor ? null : `¿Deshacer el pago de ${nombreDe(r)}?`
     )
   }
 
@@ -222,6 +227,63 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   const coincideTexto = (r) =>
     !q || sinTildes(`${nombreDe(r)} ${nombreCompleto(r.creador)}`).includes(q)
 
+  // Observaciones de una persona (faltas, revisión), en texto corto
+  const observaciones = (r) => {
+    const out = []
+    const propias = r.perfil_id ? (faltas[r.perfil_id]?.propias ?? 0) : 0
+    if (propias > 0) out.push(`${propias} falta${propias > 1 ? 's' : ''} (90 días)`)
+    if (r.perfil?.en_revision) out.push('En revisión')
+    const dAc = !r.perfil_id && r.creador ? (faltas[r.creador.id]?.acompanantes ?? 0) : 0
+    if (dAc > 0) out.push(`Su grupo: ${dAc} falta${dAc > 1 ? 's' : ''}`)
+    return out
+  }
+
+  // Quién reservó, con sus acciones (se despliega al tocar)
+  const infoCreador = (creador) =>
+    creador ? (
+      <div className="space-y-1.5">
+        <p>
+          Reservó: <strong>{nombreCompleto(creador)}</strong>
+          <span className="text-suave"> · {creador.nivel === 'confiable' ? 'Confiable' : 'Cuenta nueva'}</span>
+        </p>
+        {creador.en_revision && (
+          <p className="font-semibold text-amarillo-texto">Cuenta en revisión por faltas</p>
+        )}
+        {creador.rechazos_seguidos >= 2 && (
+          <p className="font-semibold text-rojo">{creador.rechazos_seguidos} pagos rechazados</p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {creador.whatsapp && (
+            <a href={`https://wa.me/${creador.whatsapp}`} target="_blank" rel="noreferrer" className="btn">
+              <MessageCircle size={16} /> WhatsApp
+            </a>
+          )}
+          {creador.nivel === 'nuevo' && (
+            <button
+              disabled={trabajando}
+              onClick={() => ejecutar('aprobar_cuenta',
+                { p_perfil: creador.id, p_confiable: true },
+                '¿Marcar esta cuenta como confiable? Tendrá límites más amplios.')}
+            >
+              Marcar confiable
+            </button>
+          )}
+          {(creador.rechazos_seguidos >= 2 || creador.en_revision) && (
+            <button
+              disabled={trabajando}
+              onClick={() => ejecutar('aprobar_cuenta',
+                { p_perfil: creador.id, p_confiable: false },
+                '¿Quitar las restricciones de esta cuenta (pagos rechazados o revisión por faltas)?')}
+            >
+              Quitar restricciones
+            </button>
+          )}
+        </div>
+      </div>
+    ) : (
+      <p className="text-suave">Agregado por el encargado</p>
+    )
+
   // ---------- Asistencia ----------
   const filas = confirmados.map((r) => ({ r, c: clave(r) }))
   const debe = (f) => f.c === 'cancha_debe' && f.r.asistencia !== 'no_asistio'
@@ -249,7 +311,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   const cumpleJ = (c) => {
     if (filtroJ === 'por_verificar') return c === 'por_verificar'
     if (filtroJ === 'debe') return c === 'cancha_debe'
-    if (filtroJ === 'qr') return c === 'qr'
+    if (filtroJ === 'qr') return c === 'qr' || c === 'adelantado'
     if (filtroJ === 'reservado') return c === 'reservado' || c === 'rechazado'
     return true
   }
@@ -273,10 +335,13 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   const cobradoQR = pagos
     .filter((x) => idsGrupos.has(x.grupo_id) && x.estado === 'verificado' && x.metodo === 'qr')
     .reduce((s, x) => s + Number(x.monto), 0)
-  const cobradoCancha = reservas
-    .filter((r) => r.cobrado_en)
+  const cobradoAntes = reservas
+    .filter((r) => r.cobrado_en && r.cobro_tipo === 'adelantado')
     .reduce((s, r) => s + Number(r.precio), 0)
-  const cobrado = cobradoQR + cobradoCancha
+  const cobradoCancha = reservas
+    .filter((r) => r.cobrado_en && r.cobro_tipo !== 'adelantado')
+    .reduce((s, r) => s + Number(r.precio), 0)
+  const cobrado = cobradoQR + cobradoAntes + cobradoCancha
   const sumaDevolucion = (estado) => canceladas
     .filter((r) => r.devolucion_estado === estado)
     .reduce((s, r) => s + Number(r.monto_pagado), 0)
@@ -355,7 +420,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
 
       {/* ===================== JUGADORES ===================== */}
       {tab === 'jugadores' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {miBonificado && !yaTengoCupo && (
             <button
               disabled={trabajando}
@@ -374,7 +439,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
               ['todos', 'Todos', activas.length],
               ['por_verificar', 'Por verificar', nJ((c) => c === 'por_verificar')],
               ['debe', 'Debe en cancha', nJ((c) => c === 'cancha_debe')],
-              ['qr', 'Pagó QR', nJ((c) => c === 'qr')],
+              ['qr', 'Pagó (QR/antes)', nJ((c) => c === 'qr' || c === 'adelantado')],
               ['reservado', 'Sin pago', nJ((c) => c === 'reservado' || c === 'rechazado')],
             ]}
           />
@@ -387,151 +452,203 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
           {gruposVisibles.map((g) => {
             const creador = g.filas[0].creador
             const claves = g.filas.map(clave)
-            const debenG = g.filas.filter(
-              (f) => clave(f) === 'cancha_debe' && f.asistencia !== 'no_asistio'
-            )
-            const montoG = debenG.reduce((s, f) => s + Number(f.precio), 0)
+            const sinCobrar = g.filas.filter((f) => clave(f) === 'cancha_debe')
+            const montoSinCobrar = sinCobrar.reduce((s, f) => s + Number(f.precio), 0)
+            const debenG = sinCobrar.filter((f) => f.asistencia !== 'no_asistio')
+            const montoDeben = debenG.reduce((s, f) => s + Number(f.precio), 0)
+            const porVer = g.pago?.estado === 'por_verificar'
+            const sinConfirmar = !g.filas.some((f) => f.estado === 'confirmado')
+            const conCabecera =
+              g.filas.length > 1 || (creador && g.filas[0].perfil_id !== creador.id)
+            const idG = `g${g.grupoId}`
+            const mostrarBarra =
+              porVer || sinCobrar.length > 1 || (debenG.length > 1 && comenzo) || (sinConfirmar && !porVer)
+
             return (
-              <div key={g.grupoId} className={`tarjeta space-y-2 border-l-4 ${BORDE_IZQ[colorGrupo(claves)]}`}>
-                {creador ? (
-                  <div className="space-y-1.5 text-sm">
-                    <p>
-                      Reservó: <strong>{nombreCompleto(creador)}</strong>
-                      <span className="text-suave">
-                        {' · '}{creador.nivel === 'confiable' ? 'Confiable' : 'Cuenta nueva'}
+              <div
+                key={g.grupoId}
+                className={`tarjeta overflow-hidden border-l-4 p-0 ${BORDE_IZQ[colorGrupo(claves)]}`}
+              >
+                {conCabecera && (
+                  <div className="border-b border-borde bg-borde/30">
+                    <button
+                      type="button"
+                      onClick={() => alternar(idG)}
+                      aria-expanded={abierto === idG}
+                      className="flex min-h-0 w-full items-center gap-2 rounded-none border-0 bg-transparent px-3 py-1.5 text-left text-sm"
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        {creador ? (
+                          <>Reservó <strong>{nombreCompleto(creador)}</strong>
+                            <span className="text-suave"> · {g.filas.length} cupo(s)</span></>
+                        ) : (
+                          <>Agregado por el encargado <span className="text-suave">· {g.filas.length} cupo(s)</span></>
+                        )}
                       </span>
-                    </p>
-                    {creador.en_revision && (
-                      <p className="font-semibold text-amarillo-texto">Cuenta en revisión por faltas</p>
-                    )}
-                    {creador.rechazos_seguidos >= 2 && (
-                      <p className="font-semibold text-rojo">{creador.rechazos_seguidos} pagos rechazados</p>
-                    )}
-                    <div className="flex flex-wrap gap-2">
-                      {creador.whatsapp && (
-                        <a href={`https://wa.me/${creador.whatsapp}`} target="_blank" rel="noreferrer" className="btn">
-                          <MessageCircle size={16} /> WhatsApp
-                        </a>
+                      {creador?.rechazos_seguidos >= 2 && (
+                        <span className="text-xs font-semibold text-rojo">{creador.rechazos_seguidos} rechazos</span>
                       )}
-                      {creador.nivel === 'nuevo' && (
-                        <button
-                          disabled={trabajando}
-                          onClick={() => ejecutar('aprobar_cuenta',
-                            { p_perfil: creador.id, p_confiable: true },
-                            '¿Marcar esta cuenta como confiable? Tendrá límites más amplios.')}
-                        >
-                          Marcar confiable
-                        </button>
+                      {creador?.en_revision && (
+                        <span className="text-xs font-semibold text-amarillo-texto">revisión</span>
                       )}
-                      {(creador.rechazos_seguidos >= 2 || creador.en_revision) && (
-                        <button
-                          disabled={trabajando}
-                          onClick={() => ejecutar('aprobar_cuenta',
-                            { p_perfil: creador.id, p_confiable: false },
-                            '¿Quitar las restricciones de esta cuenta (pagos rechazados o revisión por faltas)?')}
-                        >
-                          Quitar restricciones
-                        </button>
-                      )}
-                    </div>
+                      <ChevronDown
+                        size={16}
+                        className={`shrink-0 text-suave transition-transform ${abierto === idG ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {abierto === idG && <div className="px-3 pb-2 text-sm">{infoCreador(creador)}</div>}
                   </div>
-                ) : (
-                  <p className="text-sm text-suave">Agregado por el encargado</p>
                 )}
 
-                <ul className="space-y-2">
-                  {g.filas.map((f) => (
-                    <li key={f.id} className="space-y-1.5 border-t border-borde pt-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold">{nombreDe(f)}</span>
-                        {f.posicion === 'arquero' && <Hand size={16} className="text-suave" aria-label="Arquero" />}
-                        <span className="text-sm tabular-nums text-suave">{bs(f.precio)} Bs</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        <Etiqueta clave={clave(f)} />
-                        {f.asistencia === 'asistio' && <Etiqueta clave="asistio" />}
-                        {f.asistencia === 'no_asistio' && <Etiqueta clave="falto" />}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button disabled={trabajando} onClick={() => reasignar(f)}>Reasignar</button>
-                        {hayDinero(g, f) ? (
-                          <>
-                            <button
-                              disabled={trabajando}
-                              onClick={() => ejecutar('liberar_cupo',
-                                { p_reserva: f.id, p_devolver: true },
-                                `¿Liberar este cupo y dejar pendiente la devolución de ${bs(f.precio)} Bs?`)}
-                            >
-                              Liberar y devolver
-                            </button>
-                            <button
-                              disabled={trabajando}
-                              onClick={() => ejecutar('liberar_cupo',
-                                { p_reserva: f.id, p_devolver: false },
-                                '¿Liberar este cupo SIN devolver el dinero?')}
-                            >
-                              Liberar sin devolución
-                            </button>
-                          </>
-                        ) : (
+                <ul className="divide-y divide-borde">
+                  {g.filas.map((f) => {
+                    const c = clave(f)
+                    return (
+                      <li key={f.id} className="px-3 py-2">
+                        <div className="flex items-center gap-2">
                           <button
-                            disabled={trabajando}
-                            onClick={() => ejecutar('liberar_cupo',
-                              { p_reserva: f.id, p_devolver: false },
-                              '¿Liberar este cupo?')}
+                            type="button"
+                            onClick={() => alternar(f.id)}
+                            aria-expanded={abierto === f.id}
+                            className="min-h-0 min-w-0 flex-1 border-0 bg-transparent p-0 text-left"
                           >
-                            Liberar
+                            <span className="flex items-center gap-1.5">
+                              <span className="truncate font-semibold">{nombreDe(f)}</span>
+                              {f.posicion === 'arquero' && (
+                                <Hand size={14} className="shrink-0 text-suave" aria-label="Arquero" />
+                              )}
+                              <span className="shrink-0 text-xs tabular-nums text-suave">{bs(f.precio)} Bs</span>
+                            </span>
+                            <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                              <EstadoCorto clave={c} />
+                              {f.asistencia === 'asistio' && <EstadoCorto clave="asistio" />}
+                              {f.asistencia === 'no_asistio' && <EstadoCorto clave="falto" />}
+                              {observaciones(f).map((o) => (
+                                <span key={o} className="text-xs font-semibold text-amarillo-texto">{o}</span>
+                              ))}
+                            </span>
                           </button>
+
+                          {c === 'cancha_debe' && (
+                            <button
+                              disabled={trabajando}
+                              className="btn btn-amarillo min-h-9 shrink-0 px-2.5 text-sm"
+                              onClick={() => cobrar(f, true, 'adelantado')}
+                            >
+                              <Check size={16} /> Ya pagó
+                            </button>
+                          )}
+                          <ChevronDown
+                            size={16}
+                            className={`shrink-0 text-suave transition-transform ${abierto === f.id ? 'rotate-180' : ''}`}
+                          />
+                        </div>
+
+                        {abierto === f.id && (
+                          <div className="mt-2 space-y-2 border-t border-borde pt-2 text-sm">
+                            {!conCabecera && infoCreador(creador)}
+                            <div className="flex flex-wrap gap-2">
+                              <button disabled={trabajando} onClick={() => reasignar(f)}>Reasignar</button>
+                              {hayDinero(g, f) ? (
+                                <>
+                                  <button
+                                    disabled={trabajando}
+                                    onClick={() => ejecutar('liberar_cupo',
+                                      { p_reserva: f.id, p_devolver: true },
+                                      `¿Liberar este cupo y dejar pendiente la devolución de ${bs(f.precio)} Bs?`)}
+                                  >
+                                    Liberar y devolver
+                                  </button>
+                                  <button
+                                    disabled={trabajando}
+                                    onClick={() => ejecutar('liberar_cupo',
+                                      { p_reserva: f.id, p_devolver: false },
+                                      '¿Liberar este cupo SIN devolver el dinero?')}
+                                  >
+                                    Liberar sin devolución
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  disabled={trabajando}
+                                  onClick={() => ejecutar('liberar_cupo',
+                                    { p_reserva: f.id, p_devolver: false },
+                                    '¿Liberar este cupo?')}
+                                >
+                                  Liberar
+                                </button>
+                              )}
+                              {(c === 'adelantado' || c === 'cancha_cobrado') && (
+                                <button disabled={trabajando} onClick={() => cobrar(f, false)}>
+                                  <RotateCcw size={14} /> Deshacer pago
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         )}
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    )
+                  })}
                 </ul>
 
-                {g.pago?.estado === 'por_verificar' && (
-                  <div className="space-y-2 border-t border-borde pt-2">
-                    <p className="font-semibold">Monto a verificar: {bs(g.pago.monto)} Bs</p>
-                    <div className="flex flex-wrap gap-2">
+                {mostrarBarra && (
+                  <div className="flex flex-wrap items-center gap-2 border-t border-borde px-3 py-2">
+                    {porVer && (
+                      <>
+                        <span className="w-full text-sm font-semibold">
+                          Verificar pago: {bs(g.pago.monto)} Bs
+                        </span>
+                        <button
+                          disabled={trabajando}
+                          className="btn btn-activo"
+                          onClick={() => ejecutar('confirmar_pago', { p_grupo: g.grupoId })}
+                        >
+                          <Check size={16} /> Confirmar
+                        </button>
+                        <button
+                          disabled={trabajando}
+                          onClick={() => ejecutar('rechazar_pago', { p_grupo: g.grupoId },
+                            `¿Rechazar este pago? La persona tendrá otros ${partido.minutos_reserva} minutos para volver a intentarlo.`)}
+                        >
+                          Rechazar
+                        </button>
+                      </>
+                    )}
+
+                    {sinCobrar.length > 1 && (
                       <button
                         disabled={trabajando}
-                        className="btn btn-activo"
-                        onClick={() => ejecutar('confirmar_pago', { p_grupo: g.grupoId })}
+                        className="btn btn-amarillo"
+                        onClick={() => ejecutar('cobrar_en_cancha',
+                          { p_grupo: g.grupoId, p_tipo: 'adelantado' },
+                          `¿Ya pagaron antes los ${sinCobrar.length} cupos de este grupo (${bs(montoSinCobrar)} Bs)?`)}
                       >
-                        Confirmar pago
+                        <Check size={16} /> Ya pagaron todos ({bs(montoSinCobrar)} Bs)
                       </button>
+                    )}
+
+                    {debenG.length > 1 && comenzo && (
                       <button
                         disabled={trabajando}
-                        onClick={() => ejecutar('rechazar_pago', { p_grupo: g.grupoId },
-                          `¿Rechazar este pago? La persona tendrá otros ${partido.minutos_reserva} minutos para volver a intentarlo.`)}
+                        className="btn btn-amarillo"
+                        onClick={() => ejecutar('cobrar_en_cancha',
+                          { p_grupo: g.grupoId, p_tipo: 'cancha' },
+                          `¿Ya cobraste ${bs(montoDeben)} Bs en cancha a los ${debenG.length} cupos de este grupo que asistieron?`)}
                       >
-                        Rechazar
+                        <Banknote size={16} /> Cobrar a todos ({bs(montoDeben)} Bs)
                       </button>
-                    </div>
+                    )}
+
+                    {sinConfirmar && !porVer && (
+                      <button
+                        disabled={trabajando}
+                        onClick={() => ejecutar('cambiar_a_cancha', { p_grupo: g.grupoId },
+                          '¿Pasar esta reserva a pago en cancha? El cupo quedará confirmado.')}
+                      >
+                        Pasar a pago en cancha
+                      </button>
+                    )}
                   </div>
-                )}
-
-                {debenG.length > 1 && (
-                  <button
-                    disabled={trabajando || !comenzo}
-                    className="btn btn-amarillo w-full"
-                    onClick={() => ejecutar('cobrar_en_cancha', { p_grupo: g.grupoId },
-                      `¿Ya cobraste ${bs(montoG)} Bs en cancha a los ${debenG.length} cupos de este grupo que asistieron?`)}
-                  >
-                    <Banknote size={18} /> Cobrar a todo el grupo ({bs(montoG)} Bs)
-                  </button>
-                )}
-                {debenG.length > 0 && !comenzo && (
-                  <p className="text-sm text-suave">El cobro en cancha se registra desde la hora de inicio.</p>
-                )}
-
-                {!g.filas.some((f) => f.estado === 'confirmado') && g.pago?.estado !== 'por_verificar' && (
-                  <button
-                    disabled={trabajando}
-                    onClick={() => ejecutar('cambiar_a_cancha', { p_grupo: g.grupoId },
-                      '¿Pasar esta reserva a pago en cancha? El cupo quedará confirmado.')}
-                  >
-                    Pasar a pago en cancha
-                  </button>
                 )}
               </div>
             )
@@ -624,15 +741,15 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
       {/* ===================== ASISTENCIA ===================== */}
       {tab === 'asistencia' && (
         <div className="space-y-3">
-          <div className="tarjeta flex justify-around text-center">
-            <div><p className="text-2xl font-bold text-verde">{nAsistio}</p><p className="text-sm text-suave">Asistieron</p></div>
-            <div><p className="text-2xl font-bold text-rojo">{nFalto}</p><p className="text-sm text-suave">Faltaron</p></div>
-            <div><p className="text-2xl font-bold">{sinMarcar.length}</p><p className="text-sm text-suave">Sin marcar</p></div>
+          <div className="tarjeta flex justify-around py-2 text-center">
+            <div><p className="text-xl font-bold text-verde">{nAsistio}</p><p className="text-xs text-suave">Asistieron</p></div>
+            <div><p className="text-xl font-bold text-rojo">{nFalto}</p><p className="text-xs text-suave">Faltaron</p></div>
+            <div><p className="text-xl font-bold">{sinMarcar.length}</p><p className="text-xs text-suave">Sin marcar</p></div>
           </div>
 
-          <div className={`aviso flex items-center gap-2 ${porCobrar.length > 0 ? 'aviso-alerta' : 'aviso-ok'}`}>
-            <Banknote size={20} className="shrink-0" />
-            <p className="font-semibold">
+          <div className={`aviso flex items-center gap-2 py-2 ${porCobrar.length > 0 ? 'aviso-alerta' : 'aviso-ok'}`}>
+            <Banknote size={18} className="shrink-0" />
+            <p className="text-sm font-semibold">
               {porCobrar.length > 0
                 ? `Por cobrar: ${porCobrar.length} cupo(s) · ${bs(montoPorCobrar)} Bs`
                 : 'No hay cobros pendientes en cancha'}
@@ -675,86 +792,89 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
             <p className="text-suave">No hay jugadores con ese filtro o búsqueda.</p>
           )}
 
-          {visiblesA.map((f) => {
-            const { r, c } = f
-            const propias = r.perfil_id ? (faltas[r.perfil_id]?.propias ?? 0) : 0
-            const deAcomp = !r.perfil_id && r.creador ? (faltas[r.creador.id]?.acompanantes ?? 0) : 0
-            const claveAsist = r.asistencia === 'asistio' ? 'asistio'
-              : r.asistencia === 'no_asistio' ? 'falto' : 'sin_marcar'
-            const colorBorde = debe(f) ? 'amarillo'
-              : claveAsist === 'asistio' ? 'verde'
-              : claveAsist === 'falto' ? 'rojo' : 'gris'
-            return (
-              <div key={r.id} className={`tarjeta space-y-2 border-l-4 ${BORDE_IZQ[colorBorde]}`}>
-                <div className="space-y-1.5">
-                  <p className="flex items-center gap-2 text-lg font-bold">
-                    {nombreDe(r)}
-                    {r.posicion === 'arquero' && <Hand size={16} className="text-suave" aria-label="Arquero" />}
-                    <span className="ml-auto text-sm font-semibold tabular-nums text-suave">{bs(r.precio)} Bs</span>
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Etiqueta clave={c} />
-                    <Etiqueta clave={claveAsist} />
-                  </div>
-                  {!r.perfil_id && r.creador && (
-                    <p className="text-sm text-suave">Reservó: {nombreCompleto(r.creador)}</p>
-                  )}
-                  {r.perfil?.en_revision && (
-                    <p className="text-sm font-semibold text-amarillo-texto">Cuenta en revisión</p>
-                  )}
-                  {propias > 0 && (
-                    <p className="text-sm text-amarillo-texto">{propias} falta(s) en los últimos 90 días</p>
-                  )}
-                  {deAcomp > 0 && (
-                    <p className="text-sm text-amarillo-texto">
-                      Acompañantes de {nombreCompleto(r.creador)} con {deAcomp} falta(s) en 90 días
-                    </p>
-                  )}
-                </div>
+          {visiblesA.length > 0 && (
+            <ul className="divide-y divide-borde overflow-hidden rounded-xl border border-borde bg-tarjeta">
+              {visiblesA.map((f) => {
+                const { r, c } = f
+                const claveAsist = r.asistencia === 'asistio' ? 'asistio'
+                  : r.asistencia === 'no_asistio' ? 'falto' : 'sin_marcar'
+                const colorBorde = debe(f) ? 'amarillo'
+                  : claveAsist === 'asistio' ? 'verde'
+                  : claveAsist === 'falto' ? 'rojo' : 'gris'
+                const asistio = r.asistencia === 'asistio'
+                const falto = r.asistencia === 'no_asistio'
+                return (
+                  <li key={r.id} className={`border-l-4 px-3 py-2 ${BORDE_IZQ[colorBorde]}`}>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => alternar(r.id)}
+                        aria-expanded={abierto === r.id}
+                        className="min-h-0 min-w-0 flex-1 border-0 bg-transparent p-0 text-left"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <span className="truncate font-semibold">{nombreDe(r)}</span>
+                          {r.posicion === 'arquero' && (
+                            <Hand size={14} className="shrink-0 text-suave" aria-label="Arquero" />
+                          )}
+                        </span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                          <EstadoCorto clave={c} />
+                          <EstadoCorto clave={claveAsist} />
+                          {observaciones(r).map((o) => (
+                            <span key={o} className="text-xs font-semibold text-amarillo-texto">{o}</span>
+                          ))}
+                        </span>
+                      </button>
 
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    disabled={trabajando || !puedeAsistio || r.asistencia === 'asistio'}
-                    className="btn btn-activo"
-                    onClick={() => marcar(r, 'asistio')}
-                  >
-                    <UserCheck size={18} /> Asistió
-                  </button>
-                  <button
-                    disabled={trabajando || !comenzo || r.asistencia === 'no_asistio'}
-                    className="btn"
-                    onClick={() => marcar(r, 'no_asistio')}
-                  >
-                    <UserX size={18} /> Faltó
-                  </button>
-                  {r.asistencia !== 'pendiente' && (
-                    <button
-                      disabled={trabajando}
-                      aria-label="Deshacer asistencia"
-                      className="btn btn-icono"
-                      onClick={() => marcar(r, 'pendiente')}
-                    >
-                      <RotateCcw size={16} />
-                    </button>
-                  )}
-                  {debe(f) && (
-                    <button
-                      disabled={trabajando || !comenzo}
-                      className="btn btn-amarillo"
-                      onClick={() => cobrar(r, true)}
-                    >
-                      <Banknote size={18} /> Cobrar {bs(r.precio)} Bs
-                    </button>
-                  )}
-                  {c === 'cancha_cobrado' && (
-                    <button disabled={trabajando} onClick={() => cobrar(r, false)}>
-                      <RotateCcw size={16} /> Deshacer cobro
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                          aria-label={asistio ? 'Quitar asistencia' : 'Marcar asistió'}
+                          aria-pressed={asistio}
+                          disabled={trabajando || (!asistio && !puedeAsistio)}
+                          className={`h-10 w-10 rounded-full p-0 ${asistio ? 'border-transparent bg-verde text-sobre-verde' : ''}`}
+                          onClick={() => marcar(r, asistio ? 'pendiente' : 'asistio')}
+                        >
+                          <UserCheck size={18} className="mx-auto" />
+                        </button>
+                        <button
+                          aria-label={falto ? 'Quitar falta' : 'Marcar faltó'}
+                          aria-pressed={falto}
+                          disabled={trabajando || (!falto && !comenzo)}
+                          className={`h-10 w-10 rounded-full p-0 ${falto ? 'border-transparent bg-rojo text-white' : ''}`}
+                          onClick={() => marcar(r, falto ? 'pendiente' : 'no_asistio')}
+                        >
+                          <UserX size={18} className="mx-auto" />
+                        </button>
+                        {debe(f) && (
+                          <button
+                            disabled={trabajando || !comenzo}
+                            aria-label={`Cobrar ${bs(r.precio)} Bs`}
+                            className="btn btn-amarillo h-10 px-2.5"
+                            onClick={() => cobrar(r, true)}
+                          >
+                            <Banknote size={16} /> {bs(r.precio)}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {abierto === r.id && (
+                      <div className="mt-2 space-y-2 border-t border-borde pt-2 text-sm">
+                        <p className="text-suave">{bs(r.precio)} Bs · {r.posicion === 'arquero' ? 'Arquero' : 'Jugador'}</p>
+                        {infoCreador(r.creador)}
+                        {(c === 'adelantado' || c === 'cancha_cobrado') && (
+                          <button disabled={trabajando} onClick={() => cobrar(r, false)}>
+                            <RotateCcw size={14} /> Deshacer pago
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </div>
       )}
 
@@ -807,7 +927,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold">{nombreDe(r)}</span>
                 {r.posicion === 'arquero' && <Hand size={16} className="text-suave" aria-label="Arquero" />}
-                <Etiqueta clave="cancelado" />
+                <EstadoCorto clave="cancelado" />
               </div>
               <p className="text-sm text-suave">
                 {r.cancelacion_tipo === 'tardia' ? 'Cancelación tardía' : 'Cancelación a tiempo'}
@@ -830,6 +950,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
           <div className="tarjeta space-y-1">
             <h3>Resumen de dinero</h3>
             <p>Cobrado por QR: {bs(cobradoQR)} Bs</p>
+            <p>Pagado antes del partido: {bs(cobradoAntes)} Bs</p>
             <p>Cobrado en cancha: {bs(cobradoCancha)} Bs</p>
             <p>Devoluciones hechas: − {bs(devHechas)} Bs</p>
             <p className="text-lg font-bold">Neto recibido: {bs(neto)} Bs</p>

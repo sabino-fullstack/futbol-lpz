@@ -14,7 +14,7 @@ export default function TarjetaPartido({ p, libres, miEstado }) {
     <article className="overflow-hidden rounded-2xl border border-borde bg-tarjeta shadow-sm">
       <Link
         to={`/partidos/${p.id}`}
-        className="grid min-h-[8.5rem] grid-cols-[minmax(0,1fr)_8.75rem] text-texto no-underline"
+        className="grid min-h-[8.5rem] grid-cols-[minmax(0,1fr)_9.5rem] text-texto no-underline min-[400px]:grid-cols-[minmax(0,1fr)_11rem]"
       >
         <div className="min-w-0 space-y-1.5 p-3">
           {p.modalidad && (
