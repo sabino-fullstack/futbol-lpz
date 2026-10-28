@@ -21,6 +21,9 @@ const ETIQUETA_DEVOLUCION = {
 const PESTANAS = [['jugadores', 'Jugadores'], ['asistencia', 'Asistencia'], ['dinero', 'Dinero']]
 const ORDEN_ASIST = { pendiente: 0, asistio: 1, no_asistio: 2 }
 const nombreDe = (r) => r.nombre_invitado || nombreCompleto(r.perfil) || 'Jugador'
+const textoCancelacion = (r) =>
+  r.cancelacion_tipo === 'partido_cancelado' ? 'partido cancelado'
+  : r.cancelacion_tipo === 'tardia' ? 'cancelación tardía' : 'a tiempo'
 
 function colorGrupo(claves) {
   if (claves.some((c) => c === 'por_verificar' || c === 'cancha_debe')) return 'amarillo'
@@ -197,7 +200,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
   const enJuego = puedeAsistio && ahora <= fin + 72 * 3600 * 1000
 
   const tabParam = params.get('tab')
-  const tab = PESTANAS.some(([id]) => id === tabParam) ? tabParam : (enJuego ? 'asistencia' : 'jugadores')
+  const tab = PESTANAS.some(([id]) => id === tabParam) ? tabParam :(partido.estado === 'cancelado' ? 'dinero' : enJuego ? 'asistencia' : 'jugadores')
 
   const pagoDe = {}
   pagos.forEach((x) => { pagoDe[x.grupo_id] = x })
@@ -401,6 +404,11 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
           {conArq(confirmados)} confirmados · {conArq(porVerificar)} por verificar · {conArq(pendientes)} pendientes
         </p>
       </div>
+      {partido.estado === 'cancelado' && (
+  <p className="aviso aviso-error">
+    Partido cancelado{partido.cancelado_motivo ? `: ${partido.cancelado_motivo}` : ''}
+  </p>
+)}
 
       {error && <p className="aviso aviso-error">{error}</p>}
       {aviso && <p className="aviso aviso-alerta">{aviso}</p>}
@@ -897,7 +905,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
                   {g.items.map((r) => (
                     <li key={r.id}>
                       {nombreDe(r)}{r.posicion === 'arquero' && ' (arquero)'} · {bs(r.monto_pagado)} Bs
-                      {' · '}{r.cancelacion_tipo === 'tardia' ? 'cancelación tardía' : 'a tiempo'}
+                      {' · '}{textoCancelacion(r)}
                     </li>
                   ))}
                 </ul>
@@ -930,7 +938,7 @@ export default function PanelPartido({ partidoId, perfilId, onVolver }) {
                 <EstadoCorto clave="cancelado" />
               </div>
               <p className="text-sm text-suave">
-                {r.cancelacion_tipo === 'tardia' ? 'Cancelación tardía' : 'Cancelación a tiempo'}
+                <span className="first-letter:uppercase">{textoCancelacion(r)}</span>
                 {' · '}
                 {r.devolucion_estado
                   ? `${bs(r.monto_pagado)} Bs · ${ETIQUETA_DEVOLUCION[r.devolucion_estado]}`

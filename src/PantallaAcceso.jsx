@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { registrar, entrar } from './auth'
 import Rueda from './Rueda'
+import { Link } from 'react-router' // <- Ya estaba importado aquí
+
+const campo = 'w-full rounded-xl border border-borde bg-tarjeta px-4 py-3 text-lg'
 
 function traducir(msg = '') {
   if (msg.includes('Invalid login credentials')) return 'El número o la contraseña no son correctos.'
@@ -9,8 +12,6 @@ function traducir(msg = '') {
   if (msg.includes('at least')) return 'La contraseña debe tener al menos 6 caracteres.'
   return msg
 }
-
-const campo = 'w-full rounded-xl border border-borde bg-tarjeta px-4 py-3 text-lg'
 
 export default function PantallaAcceso() {
   const [modo, setModo] = useState('entrar') // 'entrar' | 'crear'
@@ -39,7 +40,6 @@ export default function PantallaAcceso() {
       : await entrar({ numero, contrasena })
     setCargando(false)
     if (error) setError(traducir(error.message))
-    // Si todo sale bien, App detecta la sesión y cambia sola
   }
 
   return (
@@ -91,6 +91,13 @@ export default function PantallaAcceso() {
       </div>
 
       {error && <p className="aviso aviso-error">{error}</p>}
+
+      {/* Aquí se agregó el texto de reglas y condiciones */}
+      {creando && (
+        <p className="text-center text-sm text-suave">
+          Al crear tu cuenta aceptas las <Link to="/reglas" className="underline text-verde">reglas y condiciones</Link>.
+        </p>
+      )}
 
       <button onClick={enviar} disabled={cargando} className="btn btn-primario">
         {cargando ? <><Rueda /> Un momento...</> : creando ? 'Crear cuenta' : 'Entrar'}

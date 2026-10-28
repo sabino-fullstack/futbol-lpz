@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import TarjetaPartido from './TarjetaPartido'
 import InstalarApp from './InstalarApp'
-import FranjaAuspiciantes from './FranjaAuspiciantes'
+import PieApp from './PieApp'
 import Cargando from './Cargando'
 import { hoyBolivia, etiquetaDia, inicioPartido } from './formato'
 
@@ -88,7 +88,7 @@ export default function Partidos() {
         )
       })}
 
-      <FranjaAuspiciantes />
+      <PieApp />
     </div>
   )
 }

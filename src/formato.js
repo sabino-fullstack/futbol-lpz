@@ -80,14 +80,24 @@ export function enlaceCompartir(partido) {
   return `https://wa.me/?text=${encodeURIComponent(mensaje)}`
 }
 // Mensaje al jugador que pagó, para coordinar su devolución
+// Mensaje al jugador que pagó, para coordinar su devolución
 export function enlaceDevolucion(persona, monto, partido) {
   const nombre = persona.apodo || persona.nombre
-  const mensaje =
-    `Hola ${nombre}, soy el encargado del partido en ${partido.cancha} ` +
-    `(${fechaCorta(partido.fecha)}, ${hhmm(partido.hora)}). ` +
-    `Te escribo por la devolución de ${bs(monto)} Bs de tu cupo cancelado. ` +
-    `¿Me envías tu QR o los datos de tu cuenta para transferirte?`
+  const cuando = `${partido.cancha} (${fechaCorta(partido.fecha)}, ${hhmm(partido.hora)})`
+  const mensaje = partido.estado === 'cancelado'
+    ? `Hola ${nombre}, soy el encargado del partido en ${cuando}. Ese partido se canceló y te escribo ` +
+      `para devolverte ${bs(monto)} Bs. ¿Me envías tu QR o los datos de tu cuenta para transferirte?`
+    : `Hola ${nombre}, soy el encargado del partido en ${cuando}. Te escribo por la devolución de ` +
+      `${bs(monto)} Bs de tu cupo cancelado. ¿Me envías tu QR o los datos de tu cuenta para transferirte?`
   return `https://wa.me/${String(persona.whatsapp).replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`
+}
+
+// Aviso al grupo de que un partido se canceló
+export function enlaceCancelacion(p, motivo) {
+  const mensaje =
+    `⚠️ Se canceló el partido de ${p.cancha} (${fechaCorta(p.fecha)}, ${hhmm(p.hora)}). ` +
+    `Motivo: ${motivo}. Si ya pagaste, el encargado te contactará para devolverte el dinero.`
+  return `https://wa.me/?text=${encodeURIComponent(mensaje)}`
 }
 
 // Aviso de cambio de fecha, hora o cancha para el grupo

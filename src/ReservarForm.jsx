@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { ChevronLeft, Clock, Info } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import Contador from './Contador'
@@ -7,6 +7,7 @@ import Cargando from './Cargando'
 import Rueda from './Rueda'
 import { bs, inicioPartido, fechaCorta, rangoHora } from './formato'
 import { useVolver } from './navegacion'
+
 
 export default function ReservarForm({ perfil }) {
   const { partidoId } = useParams()
@@ -200,10 +201,11 @@ export default function ReservarForm({ perfil }) {
         <p className="text-sm text-suave">{nJug} de jugador y {nArq} de arquero</p>
       )}
 
-      <p className="text-sm text-suave">
-        Si no vienes a un partido confirmado, queda registrada una falta. Con 2 faltas en 90 días,
-        tu cuenta queda en revisión. Si no puedes ir, cancela a tiempo.
-      </p>
+<p className="text-sm text-suave">
+  Si no vienes a un partido confirmado, queda registrada una falta. Con 2 faltas en 90 días,
+  tu cuenta queda en revisión. Si no puedes ir, cancela a tiempo. Al reservar aceptas las{' '}
+  <Link to="/reglas">reglas y condiciones</Link>.
+</p>
 
       {error && <p className="aviso aviso-error">{error}</p>}
 

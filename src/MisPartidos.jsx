@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-
+import Etiqueta, { BORDE_IZQ } from './EtiquetaEstado'
 import { supabase } from './supabaseClient'
 import Cargando from './Cargando'
 import Rueda from './Rueda'
 import Interruptor from './Interruptor'
-import { BORDE_IZQ } from './EtiquetaEstado'
 import { fechaCorta, rangoHora, inicioPartido, finPartido } from './formato'
 import { Banknote, QrCode, RotateCcw, Upload, UserCheck } from 'lucide-react'
 const COLUMNAS = 'id, cancha, modalidad, fecha, hora, hora_fin, cupos, cupos_arco, estado'
@@ -31,12 +30,12 @@ export default function MisPartidos({ perfilId, esSuperadmin }) {
 
     const mias = new Map()
     a.data.forEach((x) => {
-      if (x.partidos && x.partidos.estado !== 'cancelado') mias.set(x.partido_id, x)
+      if (x.partidos) mias.set(x.partido_id, x)
     })
 
     let lista = [...mias.values()].map((x) => ({ partido: x.partidos, asig: x }))
     if (esSuperadmin && verTodos) {
-      const t = await supabase.from('partidos').select(COLUMNAS).neq('estado', 'cancelado')
+      const t = await supabase.from('partidos').select(COLUMNAS)
       if (t.error) return setError(t.error.message)
       lista = t.data.map((p) => ({ partido: p, asig: mias.get(p.id) ?? null }))
     }
@@ -106,14 +105,19 @@ export default function MisPartidos({ perfilId, esSuperadmin }) {
   if (!cargado && !error) return <Cargando />
 
   const ahora = Date.now()
-  const conTiempo = items.map((x) => ({
+const conTiempo = items
+  .filter((x) => x.partido.estado !== 'cancelado' || (pend[x.partido.id]?.devoluciones ?? 0) > 0)
+  .map((x) => ({
     ...x,
     inicio: inicioPartido(x.partido).getTime(),
     fin: finPartido(x.partido).getTime(),
   }))
-  const proximos = conTiempo.filter((x) => x.fin >= ahora).sort((a, b) => a.inicio - b.inicio)
-  const pasados = conTiempo.filter((x) => x.fin < ahora).sort((a, b) => b.inicio - a.inicio)
-
+const proximos = conTiempo
+  .filter((x) => x.partido.estado !== 'cancelado' && x.fin >= ahora)
+  .sort((a, b) => a.inicio - b.inicio)
+const pasados = conTiempo
+  .filter((x) => x.partido.estado === 'cancelado' || x.fin < ahora)
+  .sort((a, b) => b.inicio - a.inicio)
   // El cobro en cancha solo cuenta cuando el partido ya empezó
 const alertas = (x) => {
   const p = pend[x.partido.id]
@@ -132,15 +136,18 @@ const alertas = (x) => {
   const lista = ver === 'proximos' ? proximos : pasados.slice(0, pasadosVisibles)
 
   function tarjeta(x) {
+
     const p = x.partido
+        const cancelado = p.estado === 'cancelado'
     const l = libres[p.id]
     const a = alertas(x)
     const hayAlerta = a.cobros + a.devs + a.sinMarcar > 0
     return (
-      <div key={p.id} className={`tarjeta space-y-2.5 border-l-4 ${hayAlerta ? BORDE_IZQ.amarillo : BORDE_IZQ.verde}`}>
+      <div key={p.id} className={`tarjeta space-y-2.5 border-l-4 ${cancelado ? BORDE_IZQ.rojo : hayAlerta ? BORDE_IZQ.amarillo : BORDE_IZQ.verde}`}>
         <div>
           <div className="flex items-center gap-2">
             <h3 className="min-w-0 truncate text-xl">{p.cancha}</h3>
+            {cancelado && <Etiqueta clave="partido_cancelado" />}
             {p.modalidad && (
               <span className="shrink-0 rounded-full bg-verde/15 px-2 py-0.5 text-[11px] font-bold uppercase text-verde">
                 {p.modalidad}
@@ -152,7 +159,7 @@ const alertas = (x) => {
           </p>
         </div>
 
-        {l && (
+        {l && !cancelado && (
           <p className="text-sm">
             Jugadores: <strong>{p.cupos - l.libres_jugador}/{p.cupos}</strong>
             {p.cupos_arco > 0 && (
@@ -179,7 +186,7 @@ const alertas = (x) => {
 
         <Link to={`/a-cargo/${p.id}`} className="btn btn-activo">Gestionar</Link>
 
-        {x.asig && (
+        {x.asig && !cancelado && (
           <details className="rounded-xl border border-borde p-2.5">
             <summary className="flex cursor-pointer list-none items-center gap-2 font-semibold [&::-webkit-details-marker]:hidden">
               <QrCode size={18} className="shrink-0 text-verde" />

@@ -18,6 +18,7 @@ const ESTADOS = {
   sin_marcar: { texto: 'Sin marcar', corto: 'Sin marcar', Icono: User, color: 'gris' },
   confirmado: { texto: 'Cupo confirmado', corto: 'Confirmado', Icono: BadgeCheck, color: 'verde' },
   jug_cancha: { texto: 'Pagas en cancha', corto: 'Pagas en cancha', Icono: Banknote, color: 'amarillo' },
+  partido_cancelado: { texto: 'Partido cancelado', corto: 'Partido cancelado', Icono: Ban, color: 'rojo' },
 }
 
 const COLORES = {

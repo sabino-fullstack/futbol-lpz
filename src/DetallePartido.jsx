@@ -9,7 +9,7 @@ import BarraCupos from './BarraCupos'
 import ConsultarEncargado from './ConsultarEncargado'
 import MiEstado from './MiEstado'
 import Cargando from './Cargando'
-import FranjaAuspiciantes from './FranjaAuspiciantes'
+import PieApp from './PieApp'
 import {
   bs, rangoHora, textoEquipos, fechaCorta, inicioPartido, finPartido,
   enlaceCompartir, quienGanaPremio,
@@ -239,7 +239,7 @@ export default function DetallePartido() {
         })}
       </section>
 
-      <FranjaAuspiciantes />
+      <PieApp />
     </div>
   )
 }

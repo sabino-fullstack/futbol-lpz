@@ -19,6 +19,7 @@ import ActualizarApp from './ActualizarApp'
 import ErrorBoundary from './ErrorBoundary'
 import CintaAvisos from './CintaAvisos'
 import Cargando from './Cargando'
+import Reglas from './Reglas'
 
 function ScrollArriba() {
   const { pathname } = useLocation()
@@ -68,7 +69,11 @@ function App() {
   }, [usuarioId])
 
 if (cargando) return <Cargando pantalla />
-if (!sesion) return <PantallaAcceso />
+if (!sesion) {
+  return pathname === '/reglas'
+    ? <div className="mx-auto max-w-xl p-4"><Reglas /></div>
+    : <PantallaAcceso />
+}
 if (!verificado) return <Cargando pantalla />
   if (perfil && perfil.activo === false) return <CuentaSuspendida />
 
@@ -116,6 +121,7 @@ if (!verificado) return <Cargando pantalla />
             <Route path="/partidos/:partidoId/reservar" element={<ReservarForm perfil={perfil} />} />
             <Route path="/pago/:grupoId" element={<PantallaPago nombreJugador={perfil?.nombre ?? ''} />} />
             <Route path="/reservas" element={<MisReservas perfilId={usuarioId} />} />
+            <Route path="/reglas" element={<Reglas />} />
 
 {(esEncargado || esSuperadmin) && (
   <Route path="/a-cargo" element={<MisPartidos perfilId={usuarioId} esSuperadmin={esSuperadmin} />} />

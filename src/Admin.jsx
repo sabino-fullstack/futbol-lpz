@@ -6,7 +6,11 @@ import Canchas from './Canchas'
 import Cuentas from './Cuentas'
 import Formatos from './Formatos'
 import FormularioPartido from './FormularioPartido'
-import { bs, rangoHora, textoEquipos, finPartido, enlaceCambio } from './formato'
+import { Megaphone } from 'lucide-react'
+
+import MensajeGrupo from './MensajeGrupo'
+import { bs, rangoHora, textoEquipos, finPartido, enlaceCambio, enlaceCancelacion } from './formato'
+
 
 const SECCIONES = [['partidos', 'Partidos'], ['canchas', 'Canchas'], ['formatos', 'Formatos'], ['cuentas', 'Cuentas']]
 
@@ -45,7 +49,8 @@ export default function Admin() {
   const [creando, setCreando] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
   const [aviso, setAviso] = useState(null)
-
+const [verMensaje, setVerMensaje] = useState(false)
+const [avisoCancel, setAvisoCancel] = useState(null)
   async function cargar() {
     // 4 consultas y 4 variables, en el mismo orden
     const [p, e, pf, c] = await Promise.all([
@@ -116,18 +121,28 @@ export default function Admin() {
     cargar()
   }
 
-  async function cancelarPartido(id) {
-    if (!window.confirm('¿Cancelar este partido?')) return
-    const { error } = await supabase.from('partidos').update({ estado: 'cancelado' }).eq('id', id)
-    if (error) return setError(error.message)
-    cargar()
-  }
+async function cancelarPartido(p) {
+  const motivo = window.prompt(
+    `Motivo de la cancelación del partido en ${p.cancha} (${p.fecha}). Lo verán los jugadores:`
+  )
+  if (motivo === null) return
+  if (!motivo.trim()) return setError('Escribe el motivo de la cancelación')
+  if (!window.confirm(
+    'Se liberarán todas las reservas y quienes ya pagaron quedarán con la devolución pendiente. ¿Cancelar el partido?'
+  )) return
+  setError(null)
+  setAviso(null)
+  const { data, error } = await supabase.rpc('cancelar_partido', { p_partido: p.id, p_motivo: motivo })
+  if (error) return setError(error.message)
+  setAvisoCancel({ partidoId: p.id, motivo: motivo.trim(), ...data })
+  cargar()
+}
 
-  async function reactivar(id) {
-    const { error } = await supabase.from('partidos').update({ estado: 'abierto' }).eq('id', id)
-    if (error) return setError(error.message)
-    cargar()
-  }
+async function reactivar(id) {
+  const { error } = await supabase.rpc('reactivar_partido', { p_partido: id })
+  if (error) return setError(error.message)
+  cargar()
+}
 
   async function asignar(partidoId, perfilId) {
     setError(null)
@@ -168,6 +183,7 @@ export default function Admin() {
   const proximos = vivos.filter((p) => finPartido(p).getTime() >= ahora)
   const pasados = vivos.filter((p) => finPartido(p).getTime() < ahora).reverse()
   const partidoAviso = aviso ? partidos.find((x) => x.id === aviso.partidoId) : null
+  const partidoCancel = avisoCancel ? partidos.find((x) => x.id === avisoCancel.partidoId) : null
 
   const lista = filtro === 'proximos'
     ? proximos
@@ -216,8 +232,54 @@ export default function Admin() {
               </div>
             </div>
           )}
+          {avisoCancel && (
+  <div className="aviso aviso-ok space-y-2">
+    <p>
+      Partido cancelado. {avisoCancel.reservas} reserva(s) liberada(s)
+      {avisoCancel.devoluciones > 0 &&
+        `, ${avisoCancel.devoluciones} con devolución pendiente por ${bs(avisoCancel.monto)} Bs (el encargado las ve en "A mi cargo")`}.
+    </p>
+    <div className="flex flex-wrap gap-2">
+      {partidoCancel && (
+        <a className="btn btn-activo" target="_blank" rel="noreferrer"
+           href={enlaceCancelacion(partidoCancel, avisoCancel.motivo)}>
+          Avisar por WhatsApp
+        </a>
+      )}
+      <button onClick={() => setAvisoCancel(null)}>Cerrar</button>
+    </div>
+  </div>
+)}
 
+{avisoCancel && (
+  <div className="aviso aviso-ok space-y-2">
+    <p>
+      Partido cancelado. {avisoCancel.reservas} reserva(s) liberada(s)
+      {avisoCancel.devoluciones > 0 &&
+        `, ${avisoCancel.devoluciones} con devolución pendiente por ${bs(avisoCancel.monto)} Bs (el encargado las ve en "A mi cargo")`}.
+    </p>
+    <div className="flex flex-wrap gap-2">
+      {partidoCancel && (
+        <a className="btn btn-activo" target="_blank" rel="noreferrer"
+           href={enlaceCancelacion(partidoCancel, avisoCancel.motivo)}>
+          Avisar por WhatsApp
+        </a>
+      )}
+      <button onClick={() => setAvisoCancel(null)}>Cerrar</button>
+    </div>
+    
+  </div>
+  
+)}
+  <div className="mensaje mensaje-ok space-y-2">
+<button onClick={() => setVerMensaje(!verMensaje)}>
+  <Megaphone size={16} /> Anuncio de partidos para el grupo 
+</button>
+{verMensaje && <MensajeGrupo partidos={partidos} />}
+</div>
           {!creando ? (
+            
+            
             <button onClick={() => setCreando(true)}>+ Nuevo partido</button>
           ) : (
             <div className="tarjeta">
@@ -287,7 +349,7 @@ export default function Admin() {
                     <button onClick={() => cambiarCuotaArquero(p)}>Cuota de arquero</button>
                   )}
                   {p.estado !== 'cancelado' ? (
-                    <button onClick={() => cancelarPartido(p.id)}>Cancelar partido</button>
+                    <button onClick={() => cancelarPartido(p)}>Cancelar partido</button>
                   ) : (
                     <button onClick={() => reactivar(p.id)}>Reactivar partido</button>
                   )}

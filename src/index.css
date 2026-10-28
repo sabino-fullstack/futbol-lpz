@@ -3,12 +3,15 @@
 
 :root {
   color-scheme: light;
-  --fondo: #f4f5f2;
+  --fondo: #cfcfcf;
+--borde: #c3c4c3;
+--verde: #13803a;
+
   --tarjeta: #ffffff;
-  --borde: #e3e6e1;
+
   --texto: #12161a;
   --suave: #5b6670;
-  --verde: #178a3d;
+
   --sobre-verde: #ffffff;
   --rojo: #c81e2b;
   --amarillo: #d99a06;

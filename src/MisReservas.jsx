@@ -31,34 +31,51 @@ export default function MisReservas({ perfilId }) {
   const [error, setError] = useState(null)
   const [aviso, setAviso] = useState(null)
   const [cuenta, setCuenta] = useState({ faltas: 0, revision: false })
+const [canceladas, setCanceladas] = useState([])
 
-  async function cargar() {
-    const [r, p] = await Promise.all([
-      supabase.from('reservas')
-        .select('id, grupo_id, estado, vencimiento, nombre_invitado, posicion, precio, cobrado_en, partidos(id, cancha, fecha, hora, hora_fin, cuota, horas_cancelacion, canchas(enlace_maps))')
-        .eq('creada_por', perfilId)
-        .neq('estado', 'cancelado')
-        .order('created_at', { ascending: false }),
-      supabase.from('pagos')
-        .select('grupo_id, estado, metodo, created_at')
-        .order('created_at', { ascending: true }),
-    ])
-    const fallo = r.error || p.error
-    if (fallo) return setError(fallo.message)
+async function cargar() {
+  const hace30 = new Date(Date.now() - 30 * 86400000).toISOString()
+  // 3 consultas y 3 variables, en el mismo orden
+  const [r, p, c] = await Promise.all([
+    supabase.from('reservas')
+      .select('id, grupo_id, estado, vencimiento, nombre_invitado, posicion, precio, cobrado_en, partidos(id, cancha, fecha, hora, hora_fin, cuota, horas_cancelacion, canchas(enlace_maps))')
+      .eq('creada_por', perfilId)
+      .neq('estado', 'cancelado')
+      .order('created_at', { ascending: false }),
+    supabase.from('pagos')
+      .select('grupo_id, estado, metodo, created_at')
+      .order('created_at', { ascending: true }),
+    supabase.from('reservas')
+      .select('id, nombre_invitado, posicion, monto_pagado, devolucion_estado, cancelada_en, partidos(id, cancha, fecha, hora, hora_fin, cancelado_motivo)')
+      .eq('creada_por', perfilId)
+      .eq('cancelacion_tipo', 'partido_cancelado')
+      .gte('cancelada_en', hace30)
+      .order('cancelada_en', { ascending: false }),
+  ])
+  const fallo = r.error || p.error || c.error
+  if (fallo) return setError(fallo.message)
 
-    const porGrupo = {}
-    r.data.forEach((fila) => {
-      if (!porGrupo[fila.grupo_id]) {
-        porGrupo[fila.grupo_id] = { grupoId: fila.grupo_id, partido: fila.partidos, filas: [] }
-      }
-      porGrupo[fila.grupo_id].filas.push(fila)
-    })
-    const pagos = {}
-    p.data.forEach((x) => { pagos[x.grupo_id] = x }) // el último pago de cada grupo es el que manda
+  const porGrupo = {}
+  r.data.forEach((fila) => {
+    if (!porGrupo[fila.grupo_id]) {
+      porGrupo[fila.grupo_id] = { grupoId: fila.grupo_id, partido: fila.partidos, filas: [] }
+    }
+    porGrupo[fila.grupo_id].filas.push(fila)
+  })
+  const pagos = {}
+  p.data.forEach((x) => { pagos[x.grupo_id] = x }) // el último pago de cada grupo es el que manda
+  setGrupos(Object.values(porGrupo).map((g) => ({ ...g, pago: pagos[g.grupoId] })))
 
-    setGrupos(Object.values(porGrupo).map((g) => ({ ...g, pago: pagos[g.grupoId] })))
-    setCargado(true)
-  }
+  // Partidos cancelados: una tarjeta por partido
+  const porPartido = {}
+  c.data.forEach((fila) => {
+    const id = fila.partidos.id
+    if (!porPartido[id]) porPartido[id] = { partido: fila.partidos, filas: [] }
+    porPartido[id].filas.push(fila)
+  })
+  setCanceladas(Object.values(porPartido))
+  setCargado(true)
+}
 
   useEffect(() => { cargar() }, [])
 
