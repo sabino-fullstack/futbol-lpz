@@ -114,3 +114,12 @@ export const quienGanaPremio = (p) =>
 // Para buscar sin importar tildes ni mayúsculas ("perez" encuentra "Pérez")
 export const sinTildes = (t) =>
   String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+// Contraseña temporal para el jugador
+export function enlaceClaveTemporal(persona, clave) {
+  const nombre = persona.apodo || persona.nombre
+  const mensaje =
+    `Hola ${nombre}, tu contraseña temporal de Fútbol LPZ es: ${clave}\n` +
+    `Entra con tu número y esa contraseña; la app te pedirá crear una nueva. No la compartas con nadie.`
+  return `https://wa.me/${String(persona.whatsapp).replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`
+}

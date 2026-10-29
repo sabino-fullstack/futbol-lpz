@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react'
+import { Copy, Check, KeyRound, MessageCircle } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import { normalizarNumero } from './auth'
-import { nombreCompleto } from './formato'
+import { nombreCompleto, enlaceClaveTemporal } from './formato'
+import Rueda from './Rueda'
 
 const COLUMNAS =
-  'id, nombre, apellido, apodo, whatsapp, rol, nivel, activo, rechazos_seguidos, suspendido_motivo, en_revision, revision_motivo'
+  'id, nombre, apellido, apodo, whatsapp, rol, nivel, activo, rechazos_seguidos, suspendido_motivo, en_revision, revision_motivo, cambiar_clave'
+
+async function mensajeDeError(error) {
+  try {
+    const j = await error.context.json()
+    if (j?.error) return j.error
+  } catch { /* sin detalle */ }
+  return 'No se pudo restablecer la contraseña.'
+}
 
 export default function Cuentas() {
   const [texto, setTexto] = useState('')
@@ -14,6 +24,8 @@ export default function Cuentas() {
   const [aviso, setAviso] = useState(null)
   const [error, setError] = useState(null)
   const [trabajando, setTrabajando] = useState(false)
+  const [temporal, setTemporal] = useState(null) // { perfil, clave }
+  const [copiado, setCopiado] = useState(false)
 
   async function buscar() {
     // Se quitan los caracteres que rompen el filtro de la búsqueda
@@ -73,12 +85,12 @@ export default function Cuentas() {
   }
 
   async function aprobar(p, confiable) {
-  const ok = await ejecutar('aprobar_cuenta', { p_perfil: p.id, p_confiable: confiable },
-    confiable
-      ? `¿Marcar a ${nombreCompleto(p)} como cuenta confiable? Tendrá límites más amplios.`
-      : `¿Quitar las restricciones de ${nombreCompleto(p)} (pagos rechazados o revisión por faltas)?`)
-  if (ok) setAviso('Listo.')
-}
+    const ok = await ejecutar('aprobar_cuenta', { p_perfil: p.id, p_confiable: confiable },
+      confiable
+        ? `¿Marcar a ${nombreCompleto(p)} como cuenta confiable? Tendrá límites más amplios.`
+        : `¿Quitar las restricciones de ${nombreCompleto(p)} (pagos rechazados o revisión por faltas)?`)
+    if (ok) setAviso('Listo.')
+  }
 
   async function bloquearNumero() {
     const n = normalizarNumero(numeroNuevo)
@@ -95,14 +107,75 @@ export default function Cuentas() {
     if (ok) setAviso('Bloqueo quitado.')
   }
 
+  async function restablecer(p) {
+    if (!window.confirm(
+      `¿Restablecer la contraseña de ${nombreCompleto(p)}?\n\n` +
+      `Hazlo solo si la persona te escribió desde su propio número de WhatsApp. ` +
+      `Se generará una contraseña temporal que verás una sola vez.`
+    )) return
+    setError(null)
+    setAviso(null)
+    setTemporal(null)
+    setTrabajando(true)
+    const { data, error } = await supabase.functions.invoke('restablecer-clave', {
+      body: { perfil_id: p.id },
+    })
+    setTrabajando(false)
+    if (error) return setError(await mensajeDeError(error))
+    setTemporal({ perfil: p, clave: data.clave })
+    buscar()
+  }
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(temporal.clave)
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    } catch {
+      setError('No se pudo copiar solo: selecciona la contraseña y cópiala a mano.')
+    }
+  }
+
   const etiqueta = (p) =>
     p.rol === 'superadmin' ? 'Superadmin' : p.nivel === 'confiable' ? 'Confiable' : 'Cuenta nueva'
 
   return (
     <div className="space-y-3">
-      {error && <p className="text-rojo">{error}</p>}
-      {aviso && <p className="rounded-xl border border-verde p-3">{aviso}</p>}
-      {trabajando && <p className="text-suave">Procesando...</p>}
+      {error && <p className="aviso aviso-error">{error}</p>}
+      {aviso && <p className="aviso aviso-ok">{aviso}</p>}
+      {trabajando && (
+        <p className="flex items-center gap-2 text-sm text-suave"><Rueda size={16} /> Procesando...</p>
+      )}
+
+      {temporal && (
+        <div className="tarjeta space-y-3 border-l-4 border-l-amarillo">
+          <p className="font-semibold">
+            Contraseña temporal de {nombreCompleto(temporal.perfil)}
+          </p>
+          <p className="select-all rounded-xl bg-borde/50 py-3 text-center font-display text-4xl font-bold tracking-widest">
+            {temporal.clave}
+          </p>
+          <p className="text-sm text-suave">
+            Se muestra una sola vez. Al entrar, la persona deberá crear una contraseña nueva.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {temporal.perfil.whatsapp && (
+              <a
+                className="btn btn-activo"
+                target="_blank"
+                rel="noreferrer"
+                href={enlaceClaveTemporal(temporal.perfil, temporal.clave)}
+              >
+                <MessageCircle size={16} /> Enviar por WhatsApp
+              </a>
+            )}
+            <button onClick={copiar}>
+              {copiado ? <><Check size={16} /> Copiado</> : <><Copy size={16} /> Copiar</>}
+            </button>
+            <button onClick={() => setTemporal(null)}>Listo, ya la envié</button>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2">
         <input
@@ -120,21 +193,28 @@ export default function Cuentas() {
 
       {resultados.length === 0 && <p className="text-suave">No se encontraron cuentas.</p>}
       {resultados.map((p) => (
-        <div key={p.id} className="space-y-1 rounded-xl border border-borde bg-tarjeta p-3">
+        <div key={p.id} className="tarjeta space-y-1.5">
           <p className="font-semibold">{nombreCompleto(p)}</p>
           <p className="text-sm text-suave">
             {p.whatsapp && (
               <a href={`https://wa.me/${p.whatsapp}`} target="_blank" rel="noreferrer">{p.whatsapp}</a>
             )}
             {' · '}{etiqueta(p)}
-            {p.rechazos_seguidos >= 2 && ' · ⚠️ pagos rechazados'}
+            {p.rechazos_seguidos >= 2 && ' · pagos rechazados'}
           </p>
           {!p.activo && <p className="text-rojo">Suspendida: {p.suspendido_motivo}</p>}
           {p.activo && p.en_revision && (
-  <p className="text-amarillo">🔎 En revisión: {p.revision_motivo}</p>
-)}
-          
+            <p className="text-amarillo-texto">En revisión: {p.revision_motivo}</p>
+          )}
+          {p.activo && p.cambiar_clave && (
+            <p className="text-sm text-amarillo-texto">Tiene una contraseña temporal pendiente de cambiar</p>
+          )}
           <div className="flex flex-wrap gap-2 pt-1">
+            {p.activo && p.rol !== 'superadmin' && (
+              <button disabled={trabajando} onClick={() => restablecer(p)}>
+                <KeyRound size={16} /> Restablecer contraseña
+              </button>
+            )}
             {p.activo && p.rol !== 'superadmin' && (
               <button disabled={trabajando} onClick={() => suspender(p)}>Suspender</button>
             )}
@@ -144,14 +224,9 @@ export default function Cuentas() {
             {p.activo && p.rol !== 'superadmin' && p.nivel === 'nuevo' && (
               <button disabled={trabajando} onClick={() => aprobar(p, true)}>Marcar confiable</button>
             )}
-            {p.activo && p.rechazos_seguidos >= 2 && (
-              <button disabled={trabajando} onClick={() => aprobar(p, false)}>
-                Permitir avisar pagos
-              </button>
+            {p.activo && (p.rechazos_seguidos >= 2 || p.en_revision) && (
+              <button disabled={trabajando} onClick={() => aprobar(p, false)}>Quitar restricciones</button>
             )}
-            {p.activo && p.en_revision && (
-  <button disabled={trabajando} onClick={() => aprobar(p, false)}>Quitar revisión</button>
-)}
           </div>
         </div>
       ))}
@@ -159,7 +234,7 @@ export default function Cuentas() {
       <h4 className="pt-2 font-bold">Números bloqueados</h4>
       {bloqueados.length === 0 && <p className="text-suave">No hay números bloqueados.</p>}
       {bloqueados.map((b) => (
-        <div key={b.numero} className="flex items-center justify-between gap-2 rounded-xl border border-borde p-3">
+        <div key={b.numero} className="tarjeta flex items-center justify-between gap-2">
           <div>
             <p className="font-semibold">{b.numero}</p>
             <p className="text-sm text-suave">{b.motivo}</p>

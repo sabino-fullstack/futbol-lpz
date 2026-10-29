@@ -20,7 +20,7 @@ import ErrorBoundary from './ErrorBoundary'
 import CintaAvisos from './CintaAvisos'
 import Cargando from './Cargando'
 import Reglas from './Reglas'
-
+import CambiarClave from './CambiarClave'
 function ScrollArriba() {
   const { pathname } = useLocation()
   useEffect(() => { window.scrollTo(0, 0) }, [pathname])
@@ -34,6 +34,7 @@ function App() {
   const [perfil, setPerfil] = useState(null)
   const [esEncargado, setEsEncargado] = useState(false)
   const [verificado, setVerificado] = useState(false) // ya sabemos quién es y qué puede ver
+  const [recarga, setRecarga] = useState(0)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -66,7 +67,7 @@ function App() {
       setVerificado(true)
     })
     return () => { vigente = false }
-  }, [usuarioId])
+  }, [usuarioId, recarga])
 
 if (cargando) return <Cargando pantalla />
 if (!sesion) {
@@ -76,6 +77,10 @@ if (!sesion) {
 }
 if (!verificado) return <Cargando pantalla />
   if (perfil && perfil.activo === false) return <CuentaSuspendida />
+  if (perfil?.cambiar_clave) {
+  return <CambiarClave onListo={() => setRecarga((n) => n + 1)} />
+}
+
 
   const esSuperadmin = perfil?.rol === 'superadmin'
   const tabs = [

@@ -3,6 +3,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { registrar, entrar } from './auth'
 import Rueda from './Rueda'
 import { Link } from 'react-router' // <- Ya estaba importado aquí
+import OlvideClave from './OlvideClave'
 
 const campo = 'w-full rounded-xl border border-borde bg-tarjeta px-4 py-3 text-lg'
 
@@ -102,14 +103,18 @@ export default function PantallaAcceso() {
       <button onClick={enviar} disabled={cargando} className="btn btn-primario">
         {cargando ? <><Rueda /> Un momento...</> : creando ? 'Crear cuenta' : 'Entrar'}
       </button>
+              {!creando && <OlvideClave />}
 
       <button
         type="button"
         onClick={() => { setError(null); setModo(creando ? 'entrar' : 'crear') }}
         className="border-0 bg-transparent text-base text-verde underline"
       >
+
         {creando ? 'Ya tengo cuenta' : 'Soy nuevo, crear cuenta'}
+
       </button>
+
     </div>
   )
 }
