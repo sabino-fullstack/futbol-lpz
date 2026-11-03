@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import Contador from './Contador'
+import { fechaCorta, siguienteSemana, sumarDias } from './formato'
 
 const MODALIDADES = ['Fútbol 11', 'Fútbol 9', 'Fútbol 8', 'Fútbol 7', 'Fútbol 6', 'Fútbol 5', 'Futsal']
 const hh = (t) => (t ? t.slice(0, 5) : '')
 const nn = (s) => (s.trim() === '' ? null : s.trim())
 
-function valoresIniciales(p) {
+// origen: el partido que se edita o se duplica. Al duplicar, la fecha pasa a la próxima semana.
+function valoresIniciales(p, duplicando) {
   if (!p) {
     return {
       cancha_id: '', modalidad: 'Fútbol 11', modalidad_otra: '',
@@ -20,7 +22,8 @@ function valoresIniciales(p) {
     cancha_id: p.cancha_id ?? '',
     modalidad: p.modalidad ? (enLista ? p.modalidad : '__otra') : 'Fútbol 11',
     modalidad_otra: p.modalidad && !enLista ? p.modalidad : '',
-    fecha: p.fecha, hora: hh(p.hora), hora_fin: hh(p.hora_fin),
+    fecha: duplicando ? siguienteSemana(p.fecha) : p.fecha,
+    hora: hh(p.hora), hora_fin: hh(p.hora_fin),
     cuota: String(p.cuota), cupos: p.cupos, cupos_arco: p.cupos_arco,
     cuota_arquero: String(p.cuota_arquero), equipos: p.equipos ?? 0,
     formato_juego: p.formato_juego ?? '', premio: p.premio ?? '',
@@ -28,10 +31,13 @@ function valoresIniciales(p) {
   }
 }
 
-export default function FormularioPartido({ canchas, partido, textoBoton, onGuardar, onCancelar }) {
-  const [v, setV] = useState(() => valoresIniciales(partido))
+export default function FormularioPartido({ canchas, partido, base, textoBoton, onGuardar, onCancelar }) {
+  const origen = partido ?? base ?? null
+  const [v, setV] = useState(() => valoresIniciales(origen, !!base))
   const [plantillas, setPlantillas] = useState({})
-  const [formatoTocado, setFormatoTocado] = useState(!!partido?.formato_juego)
+  const [formatoTocado, setFormatoTocado] = useState(!!origen?.formato_juego)
+  const [semanas, setSemanas] = useState(0)
+  const [copiar, setCopiar] = useState(true)
   const [error, setError] = useState(null)
   const [guardando, setGuardando] = useState(false)
 
@@ -68,6 +74,10 @@ export default function FormularioPartido({ canchas, partido, textoBoton, onGuar
     if (v.hora_fin && v.hora_fin <= v.hora) {
       return setError('La hora de fin debe ser posterior a la de inicio')
     }
+    // Bolivia no cambia de horario: siempre es UTC-4
+    if (!partido && new Date(`${v.fecha}T${v.hora}-04:00`).getTime() <= Date.now()) {
+      return setError('La fecha y la hora ya pasaron')
+    }
     const modalidad = v.modalidad === '__otra' ? v.modalidad_otra.trim() : v.modalidad
     if (!modalidad) return setError('Escribe la modalidad del partido')
     if (modalidad.length > 30) return setError('La modalidad es demasiado larga (máximo 30 letras)')
@@ -79,23 +89,26 @@ export default function FormularioPartido({ canchas, partido, textoBoton, onGuar
 
     const premio = nn(v.premio)
     setGuardando(true)
-    const mensaje = await onGuardar({
-      cancha_id: cancha.id,
-      cancha: cancha.nombre,
-      modalidad,
-      fecha: v.fecha,
-      hora: v.hora,
-      hora_fin: v.hora_fin || null,
-      cuota,
-      cupos: Number(v.cupos),
-      cupos_arco: Number(v.cupos_arco),
-      cuota_arquero: v.cuota_arquero === '' ? null : Number(v.cuota_arquero),
-      equipos: v.equipos > 0 ? v.equipos : null,
-      formato_juego: nn(v.formato_juego),
-      premio,
-      premio_para: premio ? nn(v.premio_para) : null,
-      notas: nn(v.notas),
-    })
+    const mensaje = await onGuardar(
+      {
+        cancha_id: cancha.id,
+        cancha: cancha.nombre,
+        modalidad,
+        fecha: v.fecha,
+        hora: v.hora,
+        hora_fin: v.hora_fin || null,
+        cuota,
+        cupos: Number(v.cupos),
+        cupos_arco: Number(v.cupos_arco),
+        cuota_arquero: v.cuota_arquero === '' ? null : Number(v.cuota_arquero),
+        equipos: v.equipos > 0 ? v.equipos : null,
+        formato_juego: nn(v.formato_juego),
+        premio,
+        premio_para: premio ? nn(v.premio_para) : null,
+        notas: nn(v.notas),
+      },
+      { semanas, copiarEncargados: !!base && copiar }
+    )
     setGuardando(false)
     if (mensaje) setError(mensaje)
   }
@@ -104,11 +117,16 @@ export default function FormularioPartido({ canchas, partido, textoBoton, onGuar
 
   return (
     <div className="space-y-2">
-      <h3 className="font-bold">{partido ? 'Editar partido' : 'Nuevo partido'}</h3>
+      <h3>{partido ? 'Editar partido' : base ? 'Duplicar partido' : 'Nuevo partido'}</h3>
       {partido && (
         <p className="aviso aviso-alerta text-sm">
           Si cambias la fecha, la hora o la cancha, la app no avisa a los jugadores: al guardar
           te ofrece un mensaje de WhatsApp. Los cambios de cuota solo afectan reservas nuevas.
+        </p>
+      )}
+      {base && (
+        <p className="aviso text-sm">
+          Se copian los datos del partido original. Revisa la fecha y la hora antes de crearlo.
         </p>
       )}
       {canchas.length === 0 && (
@@ -173,7 +191,7 @@ export default function FormularioPartido({ canchas, partido, textoBoton, onGuar
         onCambio={cambiarEquipos}
       />
       {v.equipos > 0 && v.cupos % v.equipos !== 0 && (
-        <p className="text-amarillo">
+        <p className="text-amarillo-texto">
           Ojo: {v.cupos} cupos no se dividen exactamente entre {v.equipos} equipos.
         </p>
       )}
@@ -222,6 +240,30 @@ export default function FormularioPartido({ canchas, partido, textoBoton, onGuar
           onChange={cambiar('notas')}
         />
       </div>
+
+      {!partido && (
+        <div className="space-y-2 rounded-xl border border-borde p-3">
+          <Contador
+            etiqueta="Repetir cada semana (semanas extra)"
+            valor={semanas}
+            min={0}
+            max={8}
+            onCambio={setSemanas}
+          />
+          {semanas > 0 && v.fecha && (
+            <p className="text-sm text-suave">
+              Se crearán {semanas + 1} partidos, uno por semana, el mismo día y a la misma hora:
+              del {fechaCorta(v.fecha)} al {fechaCorta(sumarDias(v.fecha, 7 * semanas))}.
+            </p>
+          )}
+          {base && (
+            <label className="flex items-center gap-3 py-1">
+              <input type="checkbox" checked={copiar} onChange={(e) => setCopiar(e.target.checked)} />
+              Copiar los encargados y su QR
+            </label>
+          )}
+        </div>
+      )}
 
       {error && <p className="aviso aviso-error">{error}</p>}
       <div className="flex gap-2">

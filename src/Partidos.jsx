@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import TarjetaPartido from './TarjetaPartido'
+import ProximoPartido from './ProximoPartido'
 import InstalarApp from './InstalarApp'
 import PieApp from './PieApp'
 import Cargando from './Cargando'
+import { useAutoRefrescar } from './useAutoRefrescar'
 import { hoyBolivia, etiquetaDia, inicioPartido } from './formato'
 
 export default function Partidos() {
@@ -13,7 +15,9 @@ export default function Partidos() {
   const [cargado, setCargado] = useState(false)
   const [error, setError] = useState(null)
 
-  async function cargar() {
+  // silencioso = true: actualización automática, no muestra errores ni parpadea
+  async function cargar(silencioso) {
+    const callado = silencioso === true
     const { data: todos, error } = await supabase
       .from('partidos')
       .select('*, canchas(nombre, enlace_maps, foto_url), encargados(id, perfiles(nombre, apellido, apodo, whatsapp))')
@@ -21,11 +25,13 @@ export default function Partidos() {
       .gte('fecha', hoyBolivia())
       .order('fecha', { ascending: true })
       .order('hora', { ascending: true })
-    if (error) return setError(error.message)
+    if (error) {
+      if (!callado) setError(error.message)
+      return
+    }
 
     // Los partidos de hoy que ya empezaron dejan de aparecer
     const data = todos.filter((p) => inicioPartido(p).getTime() > Date.now())
-    setPartidos(data)
 
     const [lib, me] = await Promise.all([
       data.length > 0
@@ -33,24 +39,33 @@ export default function Partidos() {
         : Promise.resolve({ data: [], error: null }),
       supabase.rpc('mis_estados'),
     ])
-    if (lib.error) return setError(lib.error.message)
+    if (lib.error) {
+      if (!callado) setError(lib.error.message)
+      return
+    }
 
     const mapa = {}
     ;(lib.data ?? []).forEach((x) => {
       mapa[x.id_partido] = { jugador: x.libres_jugador, arquero: x.libres_arquero }
     })
-    setLibres(mapa)
-
     const estados = {}
     ;(me.data ?? []).forEach((x) => { estados[x.partido_id] = x })
+
+    // Todo junto, para que un partido nuevo no aparezca un instante como "lleno"
+    setPartidos(data)
+    setLibres(mapa)
     setMisEstados(estados)
+    setError(null)
     setCargado(true)
   }
 
   useEffect(() => { cargar() }, [])
+  useAutoRefrescar(() => cargar(true))
 
-  if (error) return <p className="aviso aviso-error">Error: {error}</p>
+  if (error && !cargado) return <p className="aviso aviso-error">Error: {error}</p>
   if (!cargado) return <Cargando texto="Cargando partidos..." />
+
+  const proximo = partidos.find((p) => (misEstados[p.id]?.confirmados ?? 0) > 0)
 
   const dias = []
   partidos.forEach((p) => {
@@ -62,6 +77,8 @@ export default function Partidos() {
   return (
     <div className="space-y-4">
       <h1 className="sr-only">Próximos partidos</h1>
+
+      {proximo && <ProximoPartido p={proximo} estado={misEstados[proximo.id]} />}
       <InstalarApp />
 
       {partidos.length === 0 && (

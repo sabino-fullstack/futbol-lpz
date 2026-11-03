@@ -15,6 +15,8 @@ import {
   enlaceCompartir, quienGanaPremio,
 } from './formato'
 import { useVolver } from './navegacion'
+import { useAutoRefrescar } from './useAutoRefrescar'
+
 
 const GRUPOS = [
   ['confirmado', 'Confirmados'],
@@ -41,8 +43,8 @@ export default function DetallePartido() {
   const [datos, setDatos] = useState(null) // null = cargando
   const [error, setError] = useState(null)
 
-  async function cargar() {
-    setError(null)
+  async function cargar(silencioso) { 
+    if (silencioso !== true) setError(null)
     const [p, lj, la, li, me] = await Promise.all([
       supabase.from('partidos')
         .select('*, canchas(nombre, enlace_maps, foto_url, direccion, referencia, recomendaciones), encargados(id, perfiles(nombre, apellido, apodo, whatsapp))')
@@ -52,6 +54,7 @@ export default function DetallePartido() {
       supabase.rpc('lista_partido', { p_partido: partidoId }),
       supabase.rpc('mis_estados'),
     ])
+    if (silencioso === true && (p.error || lj.error || li.error)) return // se conserva lo que ya se ve
     if (p.error || !p.data || p.data.estado === 'cancelado') return setDatos({ fallo: true })
     if (lj.error || li.error) setError('No pudimos cargar toda la información. Toca actualizar.')
     setDatos({
@@ -66,6 +69,7 @@ export default function DetallePartido() {
   }
 
   useEffect(() => { cargar() }, [partidoId])
+  useAutoRefrescar(() => cargar(true))
 
   if (!datos) return <Cargando />
   if (datos.fallo) {
@@ -89,7 +93,7 @@ export default function DetallePartido() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <button onClick={volver} className="btn"><ChevronLeft size={18} /> Volver</button>
-        <button onClick={cargar} aria-label="Actualizar" className="btn btn-icono">
+        <button onClick={() => cargar()} aria-label="Actualizar" className="btn btn-icono">
           <RefreshCw size={18} />
         </button>
       </div>

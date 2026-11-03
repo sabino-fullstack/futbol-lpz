@@ -21,6 +21,7 @@ export default function MisPartidos({ perfilId, esSuperadmin }) {
   const [subiendo, setSubiendo] = useState(null)
   const [verTodos, setVerTodos] = useState(false)
   const [pasadosVisibles, setPasadosVisibles] = useState(10)
+  const [aTodos, setATodos] = useState(true)
 
   async function cargar() {
     const a = await supabase.from('encargados')
@@ -61,46 +62,58 @@ export default function MisPartidos({ perfilId, esSuperadmin }) {
 
   useEffect(() => { cargar() }, [verTodos])
 
-  async function subirQR(asignacion, archivo) {
-    if (!archivo) return
-    setError(null)
-    setSubiendo(asignacion.id)
+async function subirQR(asignacion, archivo) {
+  if (!archivo) return
+  setError(null)
+  setSubiendo(asignacion.id)
 
-    const ext = archivo.name.split('.').pop().toLowerCase()
-    const ruta = `${perfilId}/${asignacion.id}-${Date.now()}.${ext}`
+  const ext = archivo.name.split('.').pop().toLowerCase()
+  const ruta = `${perfilId}/${asignacion.id}-${Date.now()}.${ext}`
 
-    const { error: errSubida } = await supabase.storage
-      .from('qrs')
-      .upload(ruta, archivo, { contentType: archivo.type, cacheControl: '31536000' })
-    if (errSubida) {
-      setSubiendo(null)
-      return setError('No se pudo subir: ' + errSubida.message)
-    }
+  const { error: errSubida } = await supabase.storage
+    .from('qrs')
+    .upload(ruta, archivo, { contentType: archivo.type, cacheControl: '31536000' })
+  if (errSubida) {
+    setSubiendo(null)
+    return setError('No se pudo subir: ' + errSubida.message)
+  }
 
-    const { data } = supabase.storage.from('qrs').getPublicUrl(ruta)
-    const { error: errGuardar } = await supabase
-      .from('encargados')
-      .update({ qr_url: data.publicUrl })
-      .eq('id', asignacion.id)
-    if (errGuardar) {
-      setSubiendo(null)
-      return setError('Se subió, pero no se guardó: ' + errGuardar.message)
-    }
+  const nuevo = supabase.storage.from('qrs').getPublicUrl(ruta).data.publicUrl
 
-    // Borra el QR anterior para no acumular archivos
-    if (asignacion.qr_url?.includes('/qrs/')) {
-      const rutaVieja = asignacion.qr_url.split('/qrs/')[1]
-      const { data: borrados, error: errBorrar } = await supabase.storage
-        .from('qrs')
-        .remove([rutaVieja])
+  // Este partido y, si se elige, todos mis próximos partidos
+  const mios = items.filter((x) => x.asig)
+  const objetivos = mios.filter(
+    (x) => x.asig.id === asignacion.id ||
+      (aTodos && x.partido.estado !== 'cancelado' && finPartido(x.partido).getTime() >= Date.now())
+  )
+  const ids = objetivos.map((x) => x.asig.id)
+  const viejos = [...new Set(objetivos.map((x) => x.asig.qr_url).filter(Boolean))]
+
+  const { error: errGuardar } = await supabase
+    .from('encargados')
+    .update({ qr_url: nuevo })
+    .in('id', ids)
+  if (errGuardar) {
+    setSubiendo(null)
+    return setError('Se subió, pero no se guardó: ' + errGuardar.message)
+  }
+
+  // Borra los QR anteriores que ya nadie usa (otro partido puede seguir usándolos)
+  for (const url of viejos) {
+    if (!url.includes('/qrs/')) continue
+    const { data: usos } = await supabase.from('encargados').select('id').eq('qr_url', url).limit(1)
+    if (usos && usos.length === 0) {
+      const rutaVieja = url.split('/qrs/')[1]
+      const { data: borrados, error: errBorrar } = await supabase.storage.from('qrs').remove([rutaVieja])
       if (errBorrar || !borrados?.length) {
         console.warn('No se pudo borrar el QR anterior', errBorrar, rutaVieja)
       }
     }
-
-    setSubiendo(null)
-    cargar()
   }
+
+  setSubiendo(null)
+  cargar()
+}
 
   if (!cargado && !error) return <Cargando />
 
@@ -205,6 +218,10 @@ const alertas = (x) => {
                   Aún no subiste tu QR. Los jugadores no podrán pagarte hasta que lo subas.
                 </p>
               )}
+              <label className="flex items-center gap-3 py-1 text-sm">
+  <input type="checkbox" checked={aTodos} onChange={(e) => setATodos(e.target.checked)} />
+  Usar este QR en todos mis próximos partidos
+</label>
               <label className="btn cursor-pointer">
                 {subiendo === x.asig.id ? (
                   <><Rueda size={16} /> Subiendo...</>

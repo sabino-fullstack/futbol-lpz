@@ -123,3 +123,55 @@ export function enlaceClaveTemporal(persona, clave) {
     `Entra con tu número y esa contraseña; la app te pedirá crear una nueva. No la compartas con nadie.`
   return `https://wa.me/${String(persona.whatsapp).replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`
 }
+// Suma días a una fecha 'AAAA-MM-DD' sin problemas de zona horaria
+export function sumarDias(fecha, dias) {
+  const [y, m, d] = fecha.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + dias)).toISOString().slice(0, 10)
+}
+
+// Mismo día de la semana, de aquí en adelante (nunca una fecha pasada)
+export function siguienteSemana(fecha) {
+  const hoy = hoyBolivia()
+  let f = sumarDias(fecha, 7)
+  while (f <= hoy) f = sumarDias(f, 7)
+  return f
+}
+
+// "Empieza en 3 h 20 min", "Empieza en 2 días"...
+export function faltanTexto(ms) {
+  const min = Math.floor(ms / 60000)
+  if (min <= 0) return 'Empieza ahora'
+  if (min < 60) return `Empieza en ${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `Empieza en ${h} h${min % 60 ? ` ${min % 60} min` : ''}`
+  const d = Math.floor(h / 24)
+  return `Empieza en ${d} ${d === 1 ? 'día' : 'días'}`
+}
+export const mesActual = () => hoyBolivia().slice(0, 7)
+
+// Primer y último día de un mes 'AAAA-MM'
+export function rangoMes(mes) {
+  const [y, m] = mes.split('-').map(Number)
+  const ultimo = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  return { desde: `${mes}-01`, hasta: `${mes}-${String(ultimo).padStart(2, '0')}` }
+}
+
+export function sumarMeses(mes, n) {
+  const [y, m] = mes.split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 1 + n, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+export const nombreMes = (mes) =>
+  new Date(`${mes}-01T00:00:00Z`).toLocaleDateString('es-BO', {
+    month: 'long', year: 'numeric', timeZone: 'UTC',
+  })
+
+// Lunes de la semana de una fecha 'AAAA-MM-DD'
+export function lunesDe(fecha) {
+  const [y, m, d] = fecha.split('-').map(Number)
+  const dia = new Date(Date.UTC(y, m - 1, d)).getUTCDay() // 0 = domingo
+  return sumarDias(fecha, -((dia + 6) % 7))
+}
+
+export const diaMes = (f) => `${f.slice(8, 10)}/${f.slice(5, 7)}`

@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Navigate, useParams, useSearchParams } from 'react-router'
+import { Megaphone } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import Interruptor from './Interruptor'
 import Canchas from './Canchas'
 import Cuentas from './Cuentas'
 import Formatos from './Formatos'
 import FormularioPartido from './FormularioPartido'
-import { Megaphone } from 'lucide-react'
-
 import MensajeGrupo from './MensajeGrupo'
-import { bs, rangoHora, textoEquipos, finPartido, enlaceCambio, enlaceCancelacion } from './formato'
+import {
+  bs, rangoHora, textoEquipos, finPartido, fechaCorta, sumarDias,
+  enlaceCambio, enlaceCancelacion,
+} from './formato'
+import Finanzas from './Finanzas'
 
-
-const SECCIONES = [['partidos', 'Partidos'], ['canchas', 'Canchas'], ['formatos', 'Formatos'], ['cuentas', 'Cuentas']]
+const SECCIONES = [['partidos', 'Partidos'], ['finanzas', 'Finanzas'], ['canchas', 'Canchas'], ['formatos', 'Formatos'], ['cuentas', 'Cuentas']]
 
 function AsignarEncargado({ partidoId, perfiles, onAsignar }) {
   const [perfilId, setPerfilId] = useState('')
@@ -48,15 +50,19 @@ export default function Admin() {
   const [pasadosVisibles, setPasadosVisibles] = useState(10)
   const [creando, setCreando] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
+  const [duplicandoId, setDuplicandoId] = useState(null)
   const [aviso, setAviso] = useState(null)
-const [verMensaje, setVerMensaje] = useState(false)
-const [avisoCancel, setAvisoCancel] = useState(null)
+  const [avisoCancel, setAvisoCancel] = useState(null)
+  const [avisoCreado, setAvisoCreado] = useState(null)
+  const [verMensaje, setVerMensaje] = useState(false)
+
   async function cargar() {
     // 4 consultas y 4 variables, en el mismo orden
     const [p, e, pf, c] = await Promise.all([
       supabase.from('partidos').select('*')
         .order('fecha', { ascending: true }).order('hora', { ascending: true }),
-      supabase.from('encargados').select('id, partido_id, cuota_bonificada, perfiles(nombre, apellido, whatsapp)'),
+      supabase.from('encargados')
+        .select('id, partido_id, perfil_id, qr_url, cuota_bonificada, perfiles(nombre, apellido, whatsapp)'),
       supabase.from('perfiles').select('id, nombre, apellido, whatsapp').eq('activo', true).order('nombre'),
       supabase.from('canchas').select('id, nombre, enlace_maps, foto_url, direccion, referencia, recomendaciones').order('nombre'),
     ])
@@ -70,13 +76,47 @@ const [avisoCancel, setAvisoCancel] = useState(null)
 
   useEffect(() => { cargar() }, [])
 
-  // Los formularios devuelven un mensaje de error (texto) o null si todo salió bien
-  async function crearPartido(fila) {
-    const datos = { ...fila }
-    if (datos.cuota_arquero === null) delete datos.cuota_arquero // la base pone la mitad
-    const { error } = await supabase.from('partidos').insert(datos)
+  // Los formularios devuelven un mensaje de error (texto) o null si todo salió bien.
+  // `origen` es el partido duplicado (si lo hay): de ahí se copian los encargados.
+  async function crearPartido(fila, extras = {}, origen = null) {
+    const semanas = Math.max(0, Math.min(8, Number(extras.semanas) || 0))
+    const filas = Array.from({ length: semanas + 1 }, (_, i) => {
+      const d = { ...fila, fecha: sumarDias(fila.fecha, 7 * i) }
+      if (d.cuota_arquero === null) delete d.cuota_arquero // la base pone la mitad
+      return d
+    })
+
+    const { data, error } = await supabase.from('partidos').insert(filas).select('id, fecha')
     if (error) return error.message
+
+    let copiados = 0
+    let fallaCopia = false
+    if (origen && extras.copiarEncargados) {
+      const base = encargados.filter((e) => e.partido_id === origen.id)
+      const nuevas = data.flatMap((p) =>
+        base.map((e) => ({
+          partido_id: p.id,
+          perfil_id: e.perfil_id,
+          cuota_bonificada: e.cuota_bonificada,
+          qr_url: e.qr_url,
+        }))
+      )
+      if (nuevas.length > 0) {
+        const r = await supabase.from('encargados').insert(nuevas)
+        if (r.error) fallaCopia = true
+        else copiados = base.length
+      }
+    }
+
     setCreando(false)
+    setDuplicandoId(null)
+    setAvisoCreado({
+      n: data.length,
+      primera: filas[0].fecha,
+      ultima: filas[filas.length - 1].fecha,
+      copiados,
+      fallaCopia,
+    })
     cargar()
     return null
   }
@@ -106,43 +146,28 @@ const [avisoCancel, setAvisoCancel] = useState(null)
     return null
   }
 
-  async function cambiarCuotaArquero(p) {
-    const texto = window.prompt(
-      `Nueva cuota de arquero (hoy ${bs(p.cuota_arquero)} Bs). Solo afecta reservas nuevas:`
+  async function cancelarPartido(p) {
+    const motivo = window.prompt(
+      `Motivo de la cancelación del partido en ${p.cancha} (${p.fecha}). Lo verán los jugadores:`
     )
-    if (texto === null) return
-    const valor = Number(texto)
-    if (texto.trim() === '' || Number.isNaN(valor) || valor < 0) {
-      return setError('Escribe un número válido')
-    }
-    const { error } = await supabase.from('partidos')
-      .update({ cuota_arquero: valor }).eq('id', p.id)
+    if (motivo === null) return
+    if (!motivo.trim()) return setError('Escribe el motivo de la cancelación')
+    if (!window.confirm(
+      'Se liberarán todas las reservas y quienes ya pagaron quedarán con la devolución pendiente. ¿Cancelar el partido?'
+    )) return
+    setError(null)
+    setAviso(null)
+    const { data, error } = await supabase.rpc('cancelar_partido', { p_partido: p.id, p_motivo: motivo })
     if (error) return setError(error.message)
+    setAvisoCancel({ partidoId: p.id, motivo: motivo.trim(), ...data })
     cargar()
   }
 
-async function cancelarPartido(p) {
-  const motivo = window.prompt(
-    `Motivo de la cancelación del partido en ${p.cancha} (${p.fecha}). Lo verán los jugadores:`
-  )
-  if (motivo === null) return
-  if (!motivo.trim()) return setError('Escribe el motivo de la cancelación')
-  if (!window.confirm(
-    'Se liberarán todas las reservas y quienes ya pagaron quedarán con la devolución pendiente. ¿Cancelar el partido?'
-  )) return
-  setError(null)
-  setAviso(null)
-  const { data, error } = await supabase.rpc('cancelar_partido', { p_partido: p.id, p_motivo: motivo })
-  if (error) return setError(error.message)
-  setAvisoCancel({ partidoId: p.id, motivo: motivo.trim(), ...data })
-  cargar()
-}
-
-async function reactivar(id) {
-  const { error } = await supabase.rpc('reactivar_partido', { p_partido: id })
-  if (error) return setError(error.message)
-  cargar()
-}
+  async function reactivar(id) {
+    const { error } = await supabase.rpc('reactivar_partido', { p_partido: id })
+    if (error) return setError(error.message)
+    cargar()
+  }
 
   async function asignar(partidoId, perfilId) {
     setError(null)
@@ -232,61 +257,57 @@ async function reactivar(id) {
               </div>
             </div>
           )}
-          {avisoCancel && (
-  <div className="aviso aviso-ok space-y-2">
-    <p>
-      Partido cancelado. {avisoCancel.reservas} reserva(s) liberada(s)
-      {avisoCancel.devoluciones > 0 &&
-        `, ${avisoCancel.devoluciones} con devolución pendiente por ${bs(avisoCancel.monto)} Bs (el encargado las ve en "A mi cargo")`}.
-    </p>
-    <div className="flex flex-wrap gap-2">
-      {partidoCancel && (
-        <a className="btn btn-activo" target="_blank" rel="noreferrer"
-           href={enlaceCancelacion(partidoCancel, avisoCancel.motivo)}>
-          Avisar por WhatsApp
-        </a>
-      )}
-      <button onClick={() => setAvisoCancel(null)}>Cerrar</button>
-    </div>
-  </div>
-)}
 
-{avisoCancel && (
-  <div className="aviso aviso-ok space-y-2">
-    <p>
-      Partido cancelado. {avisoCancel.reservas} reserva(s) liberada(s)
-      {avisoCancel.devoluciones > 0 &&
-        `, ${avisoCancel.devoluciones} con devolución pendiente por ${bs(avisoCancel.monto)} Bs (el encargado las ve en "A mi cargo")`}.
-    </p>
-    <div className="flex flex-wrap gap-2">
-      {partidoCancel && (
-        <a className="btn btn-activo" target="_blank" rel="noreferrer"
-           href={enlaceCancelacion(partidoCancel, avisoCancel.motivo)}>
-          Avisar por WhatsApp
-        </a>
-      )}
-      <button onClick={() => setAvisoCancel(null)}>Cerrar</button>
-    </div>
-    
-  </div>
-  
-)}
-  <div className="mensaje mensaje-ok space-y-2">
-<button onClick={() => setVerMensaje(!verMensaje)}>
-  <Megaphone size={16} /> Anuncio de partidos para el grupo 
-</button>
-{verMensaje && <MensajeGrupo partidos={partidos} />}
-</div>
+          {avisoCancel && (
+            <div className="aviso aviso-ok space-y-2">
+              <p>
+                Partido cancelado. {avisoCancel.reservas} reserva(s) liberada(s)
+                {avisoCancel.devoluciones > 0 &&
+                  `, ${avisoCancel.devoluciones} con devolución pendiente por ${bs(avisoCancel.monto)} Bs (el encargado las ve en "A mi cargo")`}.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {partidoCancel && (
+                  <a className="btn btn-activo" target="_blank" rel="noreferrer"
+                     href={enlaceCancelacion(partidoCancel, avisoCancel.motivo)}>
+                    Avisar por WhatsApp
+                  </a>
+                )}
+                <button onClick={() => setAvisoCancel(null)}>Cerrar</button>
+              </div>
+            </div>
+          )}
+
+          {avisoCreado && (
+            <div className="aviso aviso-ok space-y-2">
+              <p>
+                {avisoCreado.n === 1
+                  ? 'Partido creado.'
+                  : `Se crearon ${avisoCreado.n} partidos, uno por semana (del ${fechaCorta(avisoCreado.primera)} al ${fechaCorta(avisoCreado.ultima)}).`}
+                {avisoCreado.copiados > 0 && ` Se copiaron ${avisoCreado.copiados} encargado(s) con su QR.`}
+                {avisoCreado.fallaCopia && ' Los partidos se crearon, pero no se pudieron copiar los encargados: asígnalos a mano.'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => { setVerMensaje(true); setAvisoCreado(null) }}>
+                  Armar mensaje para el grupo
+                </button>
+                <button onClick={() => setAvisoCreado(null)}>Cerrar</button>
+              </div>
+            </div>
+          )}
+
+          <button onClick={() => setVerMensaje(!verMensaje)}>
+            <Megaphone size={16} /> Mensaje para el grupo
+          </button>
+          {verMensaje && <MensajeGrupo partidos={partidos} />}
+
           {!creando ? (
-            
-            
             <button onClick={() => setCreando(true)}>+ Nuevo partido</button>
           ) : (
             <div className="tarjeta">
               <FormularioPartido
                 canchas={canchas}
                 textoBoton="Crear partido"
-                onGuardar={crearPartido}
+                onGuardar={(fila, extras) => crearPartido(fila, extras)}
                 onCancelar={() => setCreando(false)}
               />
             </div>
@@ -327,6 +348,20 @@ async function reactivar(id) {
               )
             }
 
+            if (duplicandoId === p.id) {
+              return (
+                <div key={p.id} className="tarjeta">
+                  <FormularioPartido
+                    canchas={canchas}
+                    base={p}
+                    textoBoton="Crear"
+                    onGuardar={(fila, extras) => crearPartido(fila, extras, p)}
+                    onCancelar={() => setDuplicandoId(null)}
+                  />
+                </div>
+              )
+            }
+
             return (
               <div key={p.id} className="tarjeta space-y-2">
                 <h4 className="font-bold">
@@ -343,11 +378,13 @@ async function reactivar(id) {
 
                 <div className="flex flex-wrap gap-2">
                   {p.estado !== 'cancelado' && (
-                    <button onClick={() => { setAviso(null); setEditandoId(p.id) }}>Editar</button>
+                    <button onClick={() => { setAviso(null); setDuplicandoId(null); setEditandoId(p.id) }}>
+                      Editar
+                    </button>
                   )}
-                  {p.cupos_arco > 0 && (
-                    <button onClick={() => cambiarCuotaArquero(p)}>Cuota de arquero</button>
-                  )}
+                  <button onClick={() => { setAviso(null); setEditandoId(null); setCreando(false); setDuplicandoId(p.id) }}>
+                    Duplicar
+                  </button>
                   {p.estado !== 'cancelado' ? (
                     <button onClick={() => cancelarPartido(p)}>Cancelar partido</button>
                   ) : (
@@ -387,6 +424,7 @@ async function reactivar(id) {
       {seccion === 'canchas' && <Canchas canchas={canchas} onCambio={cargar} />}
       {seccion === 'formatos' && <Formatos />}
       {seccion === 'cuentas' && <Cuentas />}
+      {seccion === 'finanzas' && <Finanzas canchas={canchas} />}
     </div>
   )
 }
