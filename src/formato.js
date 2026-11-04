@@ -175,3 +175,14 @@ export function lunesDe(fecha) {
 }
 
 export const diaMes = (f) => `${f.slice(8, 10)}/${f.slice(5, 7)}`
+// Estado de cuenta para enviarle al organizador
+export function enlaceEstadoCuenta(nombre, whatsapp, mes, filas, t) {
+  const lineas = filas.map((f) =>
+    `• ${diaMes(f.fecha)} · ${f.cancha} · tarifa ${bs(f.tarifa)} Bs (${f.tarifa_cobrada ? 'cobrada' : 'pendiente'})`
+  )
+  const mensaje =
+    `Hola ${nombre}, este es el estado de cuenta de tus partidos de ${nombreMes(mes)} en Fútbol LPZ:\n` +
+    `${lineas.join('\n')}\n\n` +
+    `Total de tarifas: ${bs(t.total)} Bs · Cobrado: ${bs(t.cobrado)} Bs · Saldo: ${bs(t.saldo)} Bs`
+  return `https://wa.me/${String(whatsapp ?? '').replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`
+}

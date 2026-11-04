@@ -21,6 +21,7 @@ import CintaAvisos from './CintaAvisos'
 import Cargando from './Cargando'
 import Reglas from './Reglas'
 import CambiarClave from './CambiarClave'
+
 function ScrollArriba() {
   const { pathname } = useLocation()
   useEffect(() => { window.scrollTo(0, 0) }, [pathname])
@@ -82,6 +83,7 @@ if (!verificado) return <Cargando pantalla />
 }
 
 
+
   const esSuperadmin = perfil?.rol === 'superadmin'
   const tabs = [
     ['/partidos', 'Partidos', CalendarDays],
@@ -132,11 +134,13 @@ if (!verificado) return <Cargando pantalla />
   <Route path="/a-cargo" element={<MisPartidos perfilId={usuarioId} esSuperadmin={esSuperadmin} />} />
 )}
 {(esEncargado || esSuperadmin) && (
-  <Route path="/a-cargo/:partidoId" element={<PanelRuta perfilId={usuarioId} volverA="/a-cargo" />} />
+  <Route path="/a-cargo/:partidoId" element={<PanelRuta perfilId={usuarioId} esSuperadmin={esSuperadmin} volverA="/a-cargo" />} />
 )}
 
+
 {esSuperadmin && <Route path="/admin" element={<Navigate to="/admin/partidos" replace />} />}
-{esSuperadmin && <Route path="/admin/:seccion" element={<Admin />} />}
+
+{esSuperadmin && <Route path="/admin/:seccion" element={<Admin perfilId={usuarioId} />} />}
 
             <Route path="*" element={<Navigate to="/partidos" replace />} />
           </Routes>

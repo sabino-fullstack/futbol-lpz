@@ -59,6 +59,7 @@ export default function PantallaPago({ nombreJugador }) {
       const e = await supabase.from('encargados')
         .select('id, qr_url, perfiles(nombre, whatsapp)')
         .eq('partido_id', part.id)
+        .eq('tipo', 'encargado')
       if (e.error) setError(e.error.message)
       else encs = e.data
     }

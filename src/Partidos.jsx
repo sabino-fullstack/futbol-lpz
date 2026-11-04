@@ -20,7 +20,7 @@ export default function Partidos() {
     const callado = silencioso === true
     const { data: todos, error } = await supabase
       .from('partidos')
-      .select('*, canchas(nombre, enlace_maps, foto_url), encargados(id, perfiles(nombre, apellido, apodo, whatsapp))')
+      .select('*, canchas(nombre, enlace_maps, foto_url), encargados(id, tipo, perfiles(nombre, apellido, apodo, whatsapp))')
       .neq('estado', 'cancelado')
       .gte('fecha', hoyBolivia())
       .order('fecha', { ascending: true })

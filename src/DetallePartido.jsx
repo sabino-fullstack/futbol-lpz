@@ -47,7 +47,7 @@ export default function DetallePartido() {
     if (silencioso !== true) setError(null)
     const [p, lj, la, li, me] = await Promise.all([
       supabase.from('partidos')
-        .select('*, canchas(nombre, enlace_maps, foto_url, direccion, referencia, recomendaciones), encargados(id, perfiles(nombre, apellido, apodo, whatsapp))')
+        .select('*, canchas(nombre, enlace_maps, foto_url, direccion, referencia, recomendaciones), encargados(id, tipo, perfiles(nombre, apellido, apodo, whatsapp))')
         .eq('id', partidoId).maybeSingle(),
       supabase.rpc('cupos_libres', { p_partido: partidoId, p_posicion: 'jugador' }),
       supabase.rpc('cupos_libres', { p_partido: partidoId, p_posicion: 'arquero' }),

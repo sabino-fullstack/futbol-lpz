@@ -2,7 +2,7 @@ import { MessageCircle } from 'lucide-react'
 import { enlaceConsulta, nombreCorto } from './formato'
 
 export default function ConsultarEncargado({ encargados, partido }) {
-  const con = (encargados ?? []).filter((e) => e.perfiles?.whatsapp)
+const con = (encargados ?? []).filter((e) => e.tipo === 'encargado' && e.perfiles?.whatsapp)
   if (con.length === 0) return null
   return (
     <div className="space-y-2">

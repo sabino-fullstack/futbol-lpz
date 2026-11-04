@@ -7,6 +7,8 @@ import Rueda from './Rueda'
 import Interruptor from './Interruptor'
 import { fechaCorta, rangoHora, inicioPartido, finPartido } from './formato'
 import { Banknote, QrCode, RotateCcw, Upload, UserCheck } from 'lucide-react'
+import MiEstadoCuenta from './MiEstadoCuenta'
+
 const COLUMNAS = 'id, cancha, modalidad, fecha, hora, hora_fin, cupos, cupos_arco, estado'
 
 export default function MisPartidos({ perfilId, esSuperadmin }) {
@@ -25,7 +27,7 @@ export default function MisPartidos({ perfilId, esSuperadmin }) {
 
   async function cargar() {
     const a = await supabase.from('encargados')
-      .select(`id, partido_id, qr_url, partidos(${COLUMNAS})`)
+      .select(`id, partido_id, tipo, qr_url, partidos(${COLUMNAS})`)
       .eq('perfil_id', perfilId)
     if (a.error) return setError(a.error.message)
 
@@ -61,6 +63,10 @@ export default function MisPartidos({ perfilId, esSuperadmin }) {
   }
 
   useEffect(() => { cargar() }, [verTodos])
+  const [tieneAcuerdos, setTieneAcuerdos] = useState(false)
+  useEffect(() => {
+  supabase.rpc('tengo_acuerdos').then(({ data }) => setTieneAcuerdos(data === true))
+}, [])
 
 async function subirQR(asignacion, archivo) {
   if (!archivo) return
@@ -81,7 +87,7 @@ async function subirQR(asignacion, archivo) {
   const nuevo = supabase.storage.from('qrs').getPublicUrl(ruta).data.publicUrl
 
   // Este partido y, si se elige, todos mis próximos partidos
-  const mios = items.filter((x) => x.asig)
+const mios = items.filter((x) => x.asig && x.asig.tipo === 'encargado')
   const objetivos = mios.filter(
     (x) => x.asig.id === asignacion.id ||
       (aTodos && x.partido.estado !== 'cancelado' && finPartido(x.partido).getTime() >= Date.now())
@@ -119,7 +125,8 @@ async function subirQR(asignacion, archivo) {
 
   const ahora = Date.now()
 const conTiempo = items
-  .filter((x) => x.partido.estado !== 'cancelado' || (pend[x.partido.id]?.devoluciones ?? 0) > 0)
+.filter((x) => x.partido.estado !== 'cancelado' ||
+  (x.asig?.tipo !== 'ayudante' && (pend[x.partido.id]?.devoluciones ?? 0) > 0))
   .map((x) => ({
     ...x,
     inicio: inicioPartido(x.partido).getTime(),
@@ -137,8 +144,7 @@ const alertas = (x) => {
   const empezo = x.inicio <= ahora
   return {
     cobros: p && empezo ? p.por_cobrar : 0,
-    devs: p ? p.devoluciones : 0,
-    // Mientras el encargado todavía puede marcar (hasta 72 horas después del partido)
+    devs: p && x.asig?.tipo !== 'ayudante' ? p.devoluciones : 0,
     sinMarcar: p && empezo && ahora <= x.fin + 72 * 3600 * 1000 ? p.sin_marcar : 0,
   }
 }
@@ -160,6 +166,11 @@ const alertas = (x) => {
         <div>
           <div className="flex items-center gap-2">
             <h3 className="min-w-0 truncate text-xl">{p.cancha}</h3>
+            {x.asig?.tipo === 'ayudante' && (
+  <span className="shrink-0 rounded-full bg-borde px-2 py-0.5 text-[11px] font-bold uppercase text-suave">
+    Ayudante
+  </span>
+)}
             {cancelado && <Etiqueta clave="partido_cancelado" />}
             {p.modalidad && (
               <span className="shrink-0 rounded-full bg-verde/15 px-2 py-0.5 text-[11px] font-bold uppercase text-verde">
@@ -199,7 +210,7 @@ const alertas = (x) => {
 
         <Link to={`/a-cargo/${p.id}`} className="btn btn-activo">Gestionar</Link>
 
-        {x.asig && !cancelado && (
+        {x.asig?.tipo === 'encargado' && !cancelado && (
           <details className="rounded-xl border border-borde p-2.5">
             <summary className="flex cursor-pointer list-none items-center gap-2 font-semibold [&::-webkit-details-marker]:hidden">
               <QrCode size={18} className="shrink-0 text-verde" />
@@ -249,6 +260,7 @@ const alertas = (x) => {
   return (
     <div className="space-y-4">
       <h2>A mi cargo</h2>
+      {tieneAcuerdos && <MiEstadoCuenta />}
       {error && <p className="aviso aviso-error">{error}</p>}
 
       {esSuperadmin && (

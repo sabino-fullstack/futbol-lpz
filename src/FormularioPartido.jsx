@@ -31,7 +31,7 @@ function valoresIniciales(p, duplicando) {
   }
 }
 
-export default function FormularioPartido({ canchas, partido, base, textoBoton, onGuardar, onCancelar }) {
+export default function FormularioPartido({ canchas, partido, base, perfiles = [], acuerdoBase = null, textoBoton, onGuardar, onCancelar }) {
   const origen = partido ?? base ?? null
   const [v, setV] = useState(() => valoresIniciales(origen, !!base))
   const [plantillas, setPlantillas] = useState({})
@@ -40,6 +40,14 @@ export default function FormularioPartido({ canchas, partido, base, textoBoton, 
   const [copiar, setCopiar] = useState(true)
   const [error, setError] = useState(null)
   const [guardando, setGuardando] = useState(false)
+const [org, setOrg] = useState({
+  activo: !!acuerdoBase,
+  id: acuerdoBase?.organizador_id ?? '',
+  fija: String(acuerdoBase?.tarifa_fija ?? 20),
+  pct: String(acuerdoBase?.tarifa_pct ?? 0),
+  cancelado: acuerdoBase?.cobrar_si_cancelado ?? false,
+})
+
 
   useEffect(() => {
     supabase.from('formatos_plantilla').select('equipos, texto').then(({ data }) => {
@@ -88,6 +96,19 @@ export default function FormularioPartido({ canchas, partido, base, textoBoton, 
     }
 
     const premio = nn(v.premio)
+    let acuerdo = null
+if (!partido && org.activo) {
+  const fija = Number(String(org.fija).replace(',', '.'))
+  const porc = Number(String(org.pct).replace(',', '.'))
+  if (!org.id) return setError('Elige al organizador del partido')
+  if (org.fija === '' || Number.isNaN(fija) || fija < 0 || fija > 9999) {
+    return setError('La tarifa fija debe ser un número entre 0 y 9999')
+  }
+  if (org.pct === '' || Number.isNaN(porc) || porc < 0 || porc > 100) {
+    return setError('El porcentaje debe estar entre 0 y 100')
+  }
+  acuerdo = { organizador_id: org.id, fija, pct: porc, cobrar_cancelado: org.cancelado }
+}
     setGuardando(true)
     const mensaje = await onGuardar(
       {
@@ -107,7 +128,7 @@ export default function FormularioPartido({ canchas, partido, base, textoBoton, 
         premio_para: premio ? nn(v.premio_para) : null,
         notas: nn(v.notas),
       },
-      { semanas, copiarEncargados: !!base && copiar }
+      { semanas, copiarEncargados: !!base && copiar, acuerdo }
     )
     setGuardando(false)
     if (mensaje) setError(mensaje)
@@ -240,6 +261,60 @@ export default function FormularioPartido({ canchas, partido, base, textoBoton, 
           onChange={cambiar('notas')}
         />
       </div>
+      {!partido && (
+  <div className="space-y-2 rounded-xl border border-borde p-3">
+    <p className="font-semibold">¿Quién organiza este partido?</p>
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        aria-pressed={!org.activo}
+        onClick={() => setOrg({ ...org, activo: false })}
+        className={!org.activo ? 'border-transparent bg-verde text-sobre-verde' : ''}
+      >
+        Propio (yo cobro)
+      </button>
+      <button
+        type="button"
+        aria-pressed={org.activo}
+        onClick={() => setOrg({ ...org, activo: true })}
+        className={org.activo ? 'border-transparent bg-verde text-sobre-verde' : ''}
+      >
+        De un organizador
+      </button>
+    </div>
+    {org.activo && (
+      <>
+        <select value={org.id} onChange={(e) => setOrg({ ...org, id: e.target.value })}>
+          <option value="">Elegir organizador...</option>
+          {perfiles.map((p) => (
+            <option key={p.id} value={p.id}>{p.nombre} {p.apellido ?? ''} ({p.whatsapp})</option>
+          ))}
+        </select>
+        <div className="flex flex-wrap gap-2">
+          <label>
+            Tarifa fija (Bs){' '}
+            <input className="w-24" inputMode="decimal" value={org.fija}
+              onChange={(e) => setOrg({ ...org, fija: e.target.value })} />
+          </label>
+          <label>
+            + Porcentaje (%){' '}
+            <input className="w-24" inputMode="decimal" value={org.pct}
+              onChange={(e) => setOrg({ ...org, pct: e.target.value })} />
+          </label>
+        </div>
+        <label className="flex items-center gap-3 py-1">
+          <input type="checkbox" checked={org.cancelado}
+            onChange={(e) => setOrg({ ...org, cancelado: e.target.checked })} />
+          Cobrar la tarifa aunque el partido se cancele
+        </label>
+        <p className="text-xs text-suave">
+          El organizador cobra a los jugadores con su propio QR y tú solo registras tu tarifa. Queda
+          asignado como encargado del partido, y no podrás asignarte como encargado en él.
+        </p>
+      </>
+    )}
+  </div>
+)}
 
       {!partido && (
         <div className="space-y-2 rounded-xl border border-borde p-3">

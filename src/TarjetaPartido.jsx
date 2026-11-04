@@ -7,7 +7,7 @@ import { bs, rangoHora, quienGanaPremio, enlaceConsulta } from './formato'
 export default function TarjetaPartido({ p, libres, miEstado }) {
   const hayLugar = libres.jugador > 0 || libres.arquero > 0
   const abierto = hayLugar && p.estado === 'abierto'
-  const encargado = (p.encargados ?? []).find((e) => e.perfiles?.whatsapp)
+const encargado = (p.encargados ?? []).find((e) => e.tipo === 'encargado' && e.perfiles?.whatsapp)
   const foto = p.canchas?.foto_url
 
   return (
