@@ -13,8 +13,9 @@ import {
   bs, rangoHora, textoEquipos, finPartido, fechaCorta, sumarDias,
   enlaceCambio, enlaceCancelacion,
 } from './formato'
+import Analisis from './Analisis'
 
-const SECCIONES = [['partidos', 'Partidos'], ['finanzas', 'Finanzas'], ['canchas', 'Canchas'], ['formatos', 'Formatos'], ['cuentas', 'Cuentas']]
+const SECCIONES = [['partidos', 'Partidos'], ['finanzas', 'Finanzas'], ['analisis', 'Análisis'], ['canchas', 'Canchas'], ['formatos', 'Formatos'], ['cuentas', 'Cuentas']]
 
 function AsignarEncargado({ partidoId, perfiles, onAsignar }) {
   const [perfilId, setPerfilId] = useState('')
@@ -582,6 +583,7 @@ export default function Admin({ perfilId }) {
       {seccion === 'canchas' && <Canchas canchas={canchas} onCambio={cargar} />}
       {seccion === 'formatos' && <Formatos />}
       {seccion === 'cuentas' && <Cuentas />}
+      {seccion === 'analisis' && <Analisis />}
     </div>
   )
 }

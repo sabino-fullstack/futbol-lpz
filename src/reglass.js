@@ -43,12 +43,13 @@ export const SECCIONES_REGLAS = [
     ],
   },
   {
-    clave: 'datos',
-    titulo: 'Tus datos',
-    puntos: [
-      'Guardamos tu nombre, apellido, apodo (si lo pones) y número de WhatsApp para organizar los partidos.',
-      'En la lista de un partido, los demás jugadores ven tu apodo o tu nombre con la inicial del apellido. Los encargados y el organizador ven tu nombre completo y tu WhatsApp para gestionar pagos.',
-      'Si quieres corregir o borrar tus datos, escríbele al organizador.',
-    ],
-  },
+  clave: 'datos',
+  titulo: 'Tus datos',
+  puntos: [
+    'Guardamos tu nombre, apellido, apodo (si lo pones) y número de WhatsApp para organizar los partidos.',
+    'En la lista de un partido, los demás jugadores ven tu apodo o tu nombre con la inicial del apellido. Los encargados y el organizador ven tu nombre completo y tu WhatsApp para gestionar pagos.',
+    'Si decides completar tu perfil, guardamos tu zona, fecha de nacimiento, posición habitual y cómo nos conociste. Es opcional, solo tú ves tus respuestas y el organizador ve únicamente conteos generales (por ejemplo, cuántas cuentas hay por zona). Los usamos para decidir dónde abrir más partidos.',
+    'Puedes cambiar o borrar tus respuestas en "Mi perfil" cuando quieras. Para corregir o borrar el resto de tus datos, escríbele al organizador.',
+  ],
+},
 ]

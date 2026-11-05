@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, NavLink, Link, useLocation } from 'react-router'
-import { CalendarDays, ClipboardList, LogOut, Settings, Ticket } from 'lucide-react'
+import { CalendarDays, ClipboardList, LogOut, Settings, Ticket, User } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import { salir } from './auth'
 import Partidos from './Partidos'
@@ -21,6 +21,7 @@ import CintaAvisos from './CintaAvisos'
 import Cargando from './Cargando'
 import Reglas from './Reglas'
 import CambiarClave from './CambiarClave'
+import Perfil from './Perfil'
 
 function ScrollArriba() {
   const { pathname } = useLocation()
@@ -93,7 +94,7 @@ if (!verificado) return <Cargando pantalla />
   ].filter(Boolean)
 
   // La cinta (y cualquier publicidad) no aparece en pago ni en los paneles
-  const sinCinta = ['/pago', '/admin', '/a-cargo'].some((r) => pathname.startsWith(r))
+  const sinCinta = ['/perfil' ['/pago', '/admin', '/a-cargo', '/perfil'] ].some((r) => pathname.startsWith(r))
 
   return (
     <div className="min-h-screen">
@@ -112,6 +113,9 @@ if (!verificado) return <Cargando pantalla />
             Hola, {perfil?.nombre ?? ''}
           </span>
           <BotonTema />
+          <Link to="/perfil" aria-label="Mi perfil" className="btn btn-icono">
+  <User size={18} />
+</Link>
           <button onClick={salir} aria-label="Cerrar sesión" className="btn btn-icono">
             <LogOut size={18} />
           </button>
@@ -129,6 +133,7 @@ if (!verificado) return <Cargando pantalla />
             <Route path="/pago/:grupoId" element={<PantallaPago nombreJugador={perfil?.nombre ?? ''} />} />
             <Route path="/reservas" element={<MisReservas perfilId={usuarioId} />} />
             <Route path="/reglas" element={<Reglas />} />
+            <Route path="/perfil" element={<Perfil perfil={perfil} />} />
 
 {(esEncargado || esSuperadmin) && (
   <Route path="/a-cargo" element={<MisPartidos perfilId={usuarioId} esSuperadmin={esSuperadmin} />} />

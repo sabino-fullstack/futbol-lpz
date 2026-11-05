@@ -7,6 +7,7 @@ import PieApp from './PieApp'
 import Cargando from './Cargando'
 import { useAutoRefrescar } from './useAutoRefrescar'
 import { hoyBolivia, etiquetaDia, inicioPartido } from './formato'
+import PerfilPendiente from './PerfilPendiente'
 
 export default function Partidos() {
   const [partidos, setPartidos] = useState([])
@@ -79,6 +80,7 @@ export default function Partidos() {
       <h1 className="sr-only">Próximos partidos</h1>
 
       {proximo && <ProximoPartido p={proximo} estado={misEstados[proximo.id]} />}
+      <PerfilPendiente />
       <InstalarApp />
 
       {partidos.length === 0 && (
