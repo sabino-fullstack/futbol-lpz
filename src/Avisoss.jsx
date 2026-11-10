@@ -6,6 +6,7 @@ import Cargando from './Cargando'
 import { haceCuanto } from './formato'
 import { useVolver } from './navegacion'
 import ActivarAvisos from './ActivarAvisos'
+import DiagnosticoPush from './DiagnosticoPush'
 
 export default function Avisos({ perfil }) {
   const volver = useVolver('/partidos')
@@ -47,6 +48,7 @@ export default function Avisos({ perfil }) {
         </div>
       </header>
       {perfil && <ActivarAvisos userId={perfil.id} />}
+      <DiagnosticoPush />
 
       {error && <p className="aviso aviso-error">{error}</p>}
       {!lista && !error && <Cargando />}

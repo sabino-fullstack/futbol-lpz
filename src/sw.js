@@ -6,8 +6,12 @@ precacheAndRoute(self.__WB_MANIFEST)
 registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')))
 
 // El aviso "Hay una versión nueva" de la app necesita esto para poder actualizarse
+// Actualización de la app y respuesta al diagnóstico de la pantalla de avisos
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting()
+  if (event.data && event.data.type === 'PING' && event.source) {
+    event.source.postMessage({ type: 'PONG', push: true })
+  }
 })
 
 // Llega un aviso: se muestra SIEMPRE una notificación (los navegadores lo exigen)

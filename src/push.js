@@ -1,8 +1,8 @@
 import { supabase } from './supabaseClient'
 
-const CLAVE_PUBLICA = import.meta.env.VITE_VAPID_PUBLIC_KEY
+const CLAVE_PUBLICA = (import.meta.env.VITE_VAPID_PUBLIC_KEY ?? '').trim()
 
-export const hayClave = () => !!CLAVE_PUBLICA
+export const hayClave = () => CLAVE_PUBLICA !== ''
 
 export const soportaPush = () =>
   typeof window !== 'undefined' &&
@@ -36,12 +36,62 @@ function aBytes(base64Url) {
   return Uint8Array.from([...bruto].map((c) => c.charCodeAt(0)))
 }
 
+// La clave pública de avisos debe medir 65 bytes (87 caracteres) y empezar con la letra B
+export function revisarClave() {
+  try {
+    const b = aBytes(CLAVE_PUBLICA)
+    return { ok: b.length === 65 && b[0] === 4, largo: CLAVE_PUBLICA.length }
+  } catch {
+    return { ok: false, largo: CLAVE_PUBLICA.length }
+  }
+}
+
 // En la versión de desarrollo no hay servicio activo: se espera un poco y se avisa
 function swListo(ms = 4000) {
   return Promise.race([
     navigator.serviceWorker.ready,
     new Promise((_, rechazar) => setTimeout(() => rechazar(new Error('sw')), ms)),
   ])
+}
+
+export function explicarError(e) {
+  const nombre = e?.name ?? ''
+  const msg = e?.message ?? ''
+  if (nombre === 'AbortError' || /push service error/i.test(msg)) {
+    return 'Tu navegador no pudo conectarse con el servicio de notificaciones. Prueba con otra red (por ejemplo, datos móviles). Si usas Brave, activa "Usar los servicios de Google para mensajes push" en Ajustes → Privacidad. En celulares sin servicios de Google (como algunos Huawei) los avisos no funcionan.'
+  }
+  if (nombre === 'InvalidAccessError') {
+    return 'La clave de avisos de la app no es válida. Revisa VITE_VAPID_PUBLIC_KEY.'
+  }
+  if (nombre === 'NotAllowedError') {
+    return 'El permiso de notificaciones no está permitido en este navegador.'
+  }
+  return msg || 'No se pudo activar los avisos.'
+}
+
+// ¿La suscripción del celular se creó con la clave actual?
+function mismaClave(sub) {
+  const k = sub?.options?.applicationServerKey
+  if (!k) return false
+  const a = new Uint8Array(k)
+  const b = aBytes(CLAVE_PUBLICA)
+  return a.length === b.length && a.every((v, i) => v === b[i])
+}
+
+// Reutiliza la suscripción si es de la clave actual; si no, la reemplaza
+async function suscribir(reg) {
+  let sub = await reg.pushManager.getSubscription()
+  if (sub && !mismaClave(sub)) {
+    await sub.unsubscribe()
+    sub = null
+  }
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: aBytes(CLAVE_PUBLICA),
+    })
+  }
+  return sub
 }
 
 // 'sin-clave' | 'ios-instalar' | 'no-soportado' | 'bloqueado' | 'inactivo' | 'activo'
@@ -53,7 +103,8 @@ export async function estadoPush(userId) {
   if (Notification.permission === 'granted' && activadoAqui(userId)) {
     try {
       const reg = await swListo()
-      if (await reg.pushManager.getSubscription()) return 'activo'
+      const sub = await reg.pushManager.getSubscription()
+      if (sub && mismaClave(sub)) return 'activo'
     } catch { /* se ofrece activar de nuevo */ }
   }
   return 'inactivo'
@@ -80,6 +131,11 @@ async function registrar(sub) {
 // Debe llamarse directamente desde un toque del usuario (así lo exigen los navegadores)
 export async function activarPush(userId) {
   if (!hayClave() || !soportaPush()) throw new Error('Este navegador no permite avisos.')
+  if (!revisarClave().ok) {
+    throw new Error(
+      'La clave de avisos de la app está mal copiada: debe medir 87 caracteres y empezar con la letra B. Revisa VITE_VAPID_PUBLIC_KEY en Vercel.'
+    )
+  }
   const permiso = await Notification.requestPermission()
   if (permiso === 'denied') throw new Error('bloqueado')
   if (permiso !== 'granted') throw new Error('No diste el permiso. Toca el botón otra vez cuando quieras.')
@@ -90,12 +146,12 @@ export async function activarPush(userId) {
   } catch {
     throw new Error('La app todavía se está preparando. Ciérrala, ábrela de nuevo y prueba otra vez.')
   }
-  let sub = await reg.pushManager.getSubscription()
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: aBytes(CLAVE_PUBLICA),
-    })
+
+  let sub
+  try {
+    sub = await suscribir(reg)
+  } catch (e) {
+    throw new Error(`${explicarError(e)} (Detalle: ${e?.name}: ${e?.message})`)
   }
   await registrar(sub)
   marcar(userId, true)
@@ -127,20 +183,64 @@ export async function desvincularDispositivo() {
 export async function sincronizarPush(userId) {
   try {
     if (!hayClave() || !soportaPush() || Notification.permission !== 'granted') return
-    if (!activadoAqui(userId)) return
+    if (!activadoAqui(userId) || !revisarClave().ok) return
     const reg = await swListo(8000)
-    let sub = await reg.pushManager.getSubscription()
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: aBytes(CLAVE_PUBLICA),
-      })
-    }
-    await registrar(sub)
+    await registrar(await suscribir(reg))
   } catch { /* se reintenta en la próxima entrada */ }
 }
 
 export async function probarPush() {
   const { error } = await supabase.rpc('probar_push')
   if (error) throw new Error(error.message)
+}
+
+// Revisa cada pieza y devuelve qué está bien y qué no
+export async function diagnosticar() {
+  const r = {
+    clave: revisarClave(),
+    soporte: soportaPush(),
+    ios: esIOS(),
+    instalada: instalada(),
+    permiso: soportaPush() ? Notification.permission : 'no disponible',
+    sw: null,
+    swResponde: false,
+    suscripcion: null,
+    servidor: null,
+  }
+  if (soportaPush()) {
+    try {
+      const reg = await swListo(3000)
+      r.sw = { script: reg.active?.scriptURL?.split('/').pop() ?? null, esperando: !!reg.waiting }
+      // El servicio nuevo responde a este mensaje; el viejo no
+      r.swResponde = await new Promise((resolver) => {
+        const alRecibir = (ev) => {
+          if (ev.data?.type === 'PONG') {
+            clearTimeout(espera)
+            navigator.serviceWorker.removeEventListener('message', alRecibir)
+            resolver(true)
+          }
+        }
+        const espera = setTimeout(() => {
+          navigator.serviceWorker.removeEventListener('message', alRecibir)
+          resolver(false)
+        }, 1500)
+        navigator.serviceWorker.addEventListener('message', alRecibir)
+        reg.active?.postMessage({ type: 'PING' })
+      })
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        r.suscripcion = { servicio: new URL(sub.endpoint).host, claveCorrecta: mismaClave(sub) }
+      }
+    } catch { /* sw queda en null */ }
+  }
+  const { data } = await supabase.rpc('mis_dispositivos_push')
+  r.servidor = typeof data === 'number' ? data : null
+  return r
+}
+
+export async function actualizarServicio() {
+  const reg = await navigator.serviceWorker.getRegistration()
+  if (reg?.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+  else await reg?.update()
+  setTimeout(() => window.location.reload(), 900)
 }
