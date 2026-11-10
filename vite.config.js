@@ -7,7 +7,10 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), VitePWA({
+  plugins: [react(), tailwindcss(),VitePWA({
+  strategy: 'injectManifest',
+  srcDir: 'src',
+  filename: 'sw.js',
   registerType: 'prompt',
   includeAssets: ['apple-touch-icon.png', 'favicon.png'],
   manifest: {
@@ -27,7 +30,6 @@ export default defineConfig({
       { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   },
-  workbox: { cleanupOutdatedCaches: true },
 }),],
 })
 // https://vite.dev/config/

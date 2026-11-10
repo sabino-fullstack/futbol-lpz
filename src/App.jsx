@@ -25,6 +25,7 @@ import Perfil from './Perfil'
 import Ayuda from './Ayuda'
 import CampanaAvisos from './CampanaAvisos' 
 import Avisos from './Avisoss'
+import { sincronizarPush } from './push'
 
 function ScrollArriba() {
   const { pathname } = useLocation()
@@ -73,6 +74,9 @@ function App() {
     })
     return () => { vigente = false }
   }, [usuarioId, recarga])
+useEffect(() => {
+  if (usuarioId && verificado) sincronizarPush(usuarioId)
+}, [usuarioId, verificado])
 
 if (cargando) return <Cargando pantalla />
 if (!sesion) {
@@ -133,7 +137,7 @@ if (!verificado) return <Cargando pantalla />
             <Route path="/reglas" element={<Reglas />} />
             <Route path="/perfil" element={<Perfil perfil={perfil} />} />
             <Route path="/ayuda" element={<Ayuda perfil={perfil} />} />
-            <Route path="/avisos" element={<Avisos />} />
+            <Route path="/avisos" element={<Avisos perfil={perfil} />} />
             
 
 {(esEncargado || esSuperadmin) && (

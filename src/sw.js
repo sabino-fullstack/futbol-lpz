@@ -1,0 +1,58 @@
+import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
+import { NavigationRoute, registerRoute } from 'workbox-routing'
+
+cleanupOutdatedCaches()
+precacheAndRoute(self.__WB_MANIFEST)
+registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')))
+
+// El aviso "Hay una versión nueva" de la app necesita esto para poder actualizarse
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting()
+})
+
+// Llega un aviso: se muestra SIEMPRE una notificación (los navegadores lo exigen)
+self.addEventListener('push', (event) => {
+  let datos = {}
+  try {
+    datos = event.data ? event.data.json() : {}
+  } catch {
+    datos = {}
+  }
+  event.waitUntil(
+    self.registration.showNotification(datos.titulo || 'Fútbol LPZ', {
+      body: datos.cuerpo || 'Tienes un aviso nuevo.',
+      icon: '/icon-192.png',
+      tag: datos.tag || 'aviso',
+      renotify: true,
+      data: { url: datos.url || '/avisos' },
+    })
+  )
+})
+
+// Tocar el aviso abre la app en la pantalla correcta
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const destino = new URL(
+    (event.notification.data && event.notification.data.url) || '/avisos',
+    self.location.origin
+  ).href
+
+  event.waitUntil(
+    (async () => {
+      const ventanas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      for (const v of ventanas) {
+        if (new URL(v.url).origin !== self.location.origin) continue
+        try {
+          await v.focus()
+          if ('navigate' in v) {
+            await v.navigate(destino)
+            return
+          }
+        } catch {
+          /* se intenta abrir una ventana nueva */
+        }
+      }
+      await self.clients.openWindow(destino)
+    })()
+  )
+})

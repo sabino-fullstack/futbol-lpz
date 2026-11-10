@@ -3,6 +3,8 @@ import { Bell, BellRing } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import Interruptor from './Interruptor'
 import Rueda from './Rueda'
+import { Link } from 'react-router'
+import { pushPendiente } from './push'
 
 export default function AvisarCupo({ partidoId, jugador, arquero, espera, onCambio }) {
   const [trabajando, setTrabajando] = useState(null)
@@ -60,6 +62,15 @@ export default function AvisarCupo({ partidoId, jugador, arquero, espera, onCamb
           </label>
         )
       })}
+      {filas.some(([pos]) => espera?.[pos]?.yo) && pushPendiente() && (
+  <Link
+    to="/avisos"
+    className="flex items-center gap-2 rounded-lg bg-verde/10 p-2 text-sm font-semibold text-verde no-underline"
+  >
+    <BellRing size={16} className="shrink-0" />
+    Activa las notificaciones para recibir el aviso aunque tengas la app cerrada
+  </Link>
+)}
       {error && <p className="text-sm text-rojo">{error}</p>}
     </div>
   )

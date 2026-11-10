@@ -11,6 +11,7 @@ import PerfilForm from './PerfilForm'
 import TamanoTexto from './TamanoTexto'
 import { nombreCompleto } from './formato'
 import { useVolver } from './navegacion'
+import ActivarAvisos from './ActivarAvisos'
 
 export default function Perfil({ perfil }) {
   const volver = useVolver('/partidos')
@@ -119,6 +120,7 @@ export default function Perfil({ perfil }) {
         <Link to="/reglas" className="btn h-auto flex-col gap-1 py-3 text-sm">
           <FileText size={24} className="text-verde" /> Reglas
         </Link>
+        <ActivarAvisos userId={perfil.id} />
       </div>
 
       <section className="tarjeta space-y-3">

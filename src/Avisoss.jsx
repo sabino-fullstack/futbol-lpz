@@ -5,8 +5,9 @@ import { supabase } from './supabaseClient'
 import Cargando from './Cargando'
 import { haceCuanto } from './formato'
 import { useVolver } from './navegacion'
+import ActivarAvisos from './ActivarAvisos'
 
-export default function Avisos() {
+export default function Avisos({ perfil }) {
   const volver = useVolver('/partidos')
   const [lista, setLista] = useState(null)
   const [nuevos, setNuevos] = useState(new Set())
@@ -45,6 +46,7 @@ export default function Avisos() {
           <p className="text-suave">Te avisamos cuando se libera un cupo que esperabas.</p>
         </div>
       </header>
+      {perfil && <ActivarAvisos userId={perfil.id} />}
 
       {error && <p className="aviso aviso-error">{error}</p>}
       {!lista && !error && <Cargando />}

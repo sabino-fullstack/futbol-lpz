@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { desvincularDispositivo } from './push'
 
 // Dominio inventado para armar el correo interno. Se cambia tras la prueba.
 const DOMINIO = 'futbollpz.app'
@@ -38,4 +39,7 @@ export async function entrar({ numero, contrasena }) {
   })
 }
 
-export const salir = () => supabase.auth.signOut()
+export async function salir() {
+  await desvincularDispositivo()
+  return supabase.auth.signOut()
+}
