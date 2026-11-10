@@ -238,9 +238,44 @@ export async function diagnosticar() {
   return r
 }
 
+// Instala la versión nueva de la app si existe. Devuelve qué pasó.
 export async function actualizarServicio() {
   const reg = await navigator.serviceWorker.getRegistration()
-  if (reg?.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' })
-  else await reg?.update()
-  setTimeout(() => window.location.reload(), 900)
+  if (!reg) return 'sin-servicio'
+  if (!reg.waiting) {
+    try { await reg.update() } catch { return 'sin-conexion' }
+    const nuevo = reg.installing
+    if (nuevo) {
+      await new Promise((resolver) => {
+        const fin = () => {
+          if (['installed', 'activated', 'redundant'].includes(nuevo.state)) resolver()
+        }
+        nuevo.addEventListener('statechange', fin)
+        fin()
+        setTimeout(resolver, 8000)
+      })
+    }
+  }
+  if (!reg.waiting) return 'sin-cambios'
+  await new Promise((resolver) => {
+    navigator.serviceWorker.addEventListener('controllerchange', resolver, { once: true })
+    reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+    setTimeout(resolver, 6000)
+  })
+  window.location.reload()
+  return 'actualizada'
+}
+
+// Borra el servicio de la app y su memoria, y lo instala de cero.
+// Los avisos hay que volver a activarlos después.
+export async function repararServicio() {
+  try {
+    const registros = await navigator.serviceWorker.getRegistrations()
+    await Promise.all(registros.map((r) => r.unregister()))
+    if ('caches' in window) {
+      const nombres = await caches.keys()
+      await Promise.all(nombres.map((n) => caches.delete(n)))
+    }
+  } catch { /* igual se recarga */ }
+  window.location.reload()
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, Copy, Minus, RefreshCw, Search, X } from 'lucide-react'
 import Rueda from './Rueda'
-import { actualizarServicio, diagnosticar } from './push'
+import { actualizarServicio, diagnosticar, repararServicio } from './push'
 
 function revisiones(r) {
   const l = []
@@ -59,6 +59,8 @@ export default function DiagnosticoPush() {
   const [res, setRes] = useState(null)
   const [revisando, setRevisando] = useState(false)
   const [copiado, setCopiado] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const [trabajando, setTrabajando] = useState(false)
 
   async function revisar() {
     setRevisando(true)
@@ -78,6 +80,26 @@ export default function DiagnosticoPush() {
       setCopiado(true)
     } catch { /* se puede seleccionar a mano */ }
   }
+  async function actualizar() {
+  setMsg(null)
+  setTrabajando(true)
+  const r = await actualizarServicio()
+  setTrabajando(false)
+  if (r === 'sin-cambios') {
+    setMsg('No hay una versión nueva por instalar. Si los avisos siguen sin llegar, usa "Reparar la app".')
+  } else if (r === 'sin-conexion') {
+    setMsg('No hay conexión para buscar la versión nueva.')
+  } else if (r === 'sin-servicio') {
+    setMsg('No hay un servicio activo. Abre la versión publicada (no localhost).')
+  }
+}
+
+function reparar() {
+  if (!window.confirm(
+    'Se reinstalará la app en este celular. Tendrás que activar los avisos de nuevo (tu sesión se mantiene). ¿Continuar?'
+  )) return
+  repararServicio()
+}
 
   return (
     <details className="tarjeta">
@@ -119,16 +141,18 @@ export default function DiagnosticoPush() {
               </p>
             )}
 
-            <div className="flex flex-wrap gap-2">
-              {necesitaActualizar && (
-                <button className="btn btn-activo" onClick={actualizarServicio}>
-                  <RefreshCw size={16} /> Actualizar la app ahora
-                </button>
-              )}
-              <button onClick={copiar}>
-                {copiado ? <><Check size={16} /> Copiado</> : <><Copy size={16} /> Copiar resultado</>}
-              </button>
-            </div>
+{msg && <p className="aviso aviso-alerta text-sm">{msg}</p>}
+<div className="flex flex-wrap gap-2">
+  {necesitaActualizar && (
+    <button className="btn btn-activo" disabled={trabajando} onClick={actualizar}>
+      {trabajando ? <><Rueda size={16} /> Actualizando...</> : <><RefreshCw size={16} /> Actualizar la app ahora</>}
+    </button>
+  )}
+  <button onClick={reparar}>Reparar la app</button>
+  <button onClick={copiar}>
+    {copiado ? <><Check size={16} /> Copiado</> : <><Copy size={16} /> Copiar resultado</>}
+  </button>
+</div>
           </>
         )}
       </div>
