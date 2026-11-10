@@ -1,4 +1,4 @@
-import { AVISOS } from './avisos'
+import { AVISOS } from './avisoss'
 
 export default function CintaAvisos() {
   if (AVISOS.length === 0) return null

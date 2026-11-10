@@ -18,7 +18,7 @@ export default function TarjetaPartido({ p, libres, miEstado, espera, onEsperaCa
       <Link
         to={`/partidos/${p.id}`}
         className="grid min-h-[8.5rem] grid-cols-[minmax(0,1fr)_9.5rem] text-texto no-underline min-[400px]:grid-cols-[minmax(0,1fr)_11rem]"
-      >
+      >  
         <div className="min-w-0 space-y-1.5 p-3">
           {p.modalidad && (
             <span className="inline-block rounded-full bg-verde/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-verde">

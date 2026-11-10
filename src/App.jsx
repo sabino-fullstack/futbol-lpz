@@ -24,7 +24,7 @@ import CambiarClave from './CambiarClave'
 import Perfil from './Perfil'
 import Ayuda from './Ayuda'
 import CampanaAvisos from './CampanaAvisos' 
-import Avisos from './Avisoss'
+import Avisos from './Avisos'
 import { sincronizarPush } from './push'
 
 function ScrollArriba() {
