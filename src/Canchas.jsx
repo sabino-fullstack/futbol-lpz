@@ -1,26 +1,56 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Camera, ExternalLink, Info, MapPin, Navigation, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { supabase } from './supabaseClient'
+import Rueda from './Rueda'
 import { reducirImagen } from './imagen'
 
-async function subirFoto(archivo) {
-  const blob = await reducirImagen(archivo)
-  const ruta = `${crypto.randomUUID()}.jpg`
+const CACHE = '31536000' // los archivos tienen nombre único: el navegador puede guardarlos un año
+
+async function subir(blob, ruta) {
   const { error } = await supabase.storage
     .from('canchas')
-    .upload(ruta, blob, { contentType: 'image/jpeg' })
+    .upload(ruta, blob, { contentType: 'image/jpeg', cacheControl: CACHE })
   if (error) throw new Error('No se pudo subir la foto: ' + error.message)
   return supabase.storage.from('canchas').getPublicUrl(ruta).data.publicUrl
 }
 
-async function borrarFoto(url) {
-  if (!url || !url.includes('/canchas/')) return
-  const ruta = url.split('/canchas/')[1]
-  const { data, error } = await supabase.storage.from('canchas').remove([ruta])
-  if (error || !data?.length) console.warn('No se pudo borrar la foto', error, ruta)
+async function borrarFotos(...urls) {
+  const rutas = urls.filter((u) => u && u.includes('/canchas/')).map((u) => u.split('/canchas/')[1])
+  if (rutas.length === 0) return
+  const { data, error } = await supabase.storage.from('canchas').remove(rutas)
+  if (error || (data?.length ?? 0) < rutas.length) {
+    console.warn('No se pudieron borrar todas las fotos', error, rutas)
+  }
+}
+
+// Sube la foto grande y la miniatura
+async function subirFotos(archivo) {
+  const base = crypto.randomUUID()
+  const grande = await reducirImagen(archivo, 960, 0.75)
+  const mini = await reducirImagen(archivo, 480, 0.7)
+  const foto_url = await subir(grande, `${base}.jpg`)
+  try {
+    const foto_mini_url = await subir(mini, `${base}-mini.jpg`)
+    return { foto_url, foto_mini_url }
+  } catch (e) {
+    await borrarFotos(foto_url)
+    throw e
+  }
 }
 
 const enlaceValido = (texto) => texto === '' || /^https:\/\//i.test(texto)
 const nn = (s) => (s.trim() === '' ? null : s.trim())
+
+function Campo({ Icono, etiqueta, children }) {
+  return (
+    <label className="block space-y-1">
+      <span className="flex items-center gap-1.5 text-sm font-semibold">
+        <Icono size={15} className="text-verde" /> {etiqueta}
+      </span>
+      {children}
+    </label>
+  )
+}
 
 function FormCancha({ inicial, conFoto, textoBoton, onGuardar, onCancelar }) {
   const [f, setF] = useState({
@@ -31,9 +61,18 @@ function FormCancha({ inicial, conFoto, textoBoton, onGuardar, onCancelar }) {
     recomendaciones: inicial?.recomendaciones ?? '',
   })
   const [archivo, setArchivo] = useState(null)
+  const [previa, setPrevia] = useState(null)
   const [error, setError] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const set = (campo) => (e) => setF({ ...f, [campo]: e.target.value })
+
+  useEffect(() => () => { if (previa) URL.revokeObjectURL(previa) }, [previa])
+
+  function elegir(e) {
+    const a = e.target.files[0] ?? null
+    setArchivo(a)
+    setPrevia(a ? URL.createObjectURL(a) : null)
+  }
 
   async function guardar() {
     setError(null)
@@ -55,47 +94,73 @@ function FormCancha({ inicial, conFoto, textoBoton, onGuardar, onCancelar }) {
   }
 
   return (
-    <div className="space-y-2">
-      <input
-        placeholder="Nombre (ej. Munaypata)"
-        value={f.nombre}
-        onChange={set('nombre')}
-        disabled={!!inicial}
-      />
-      <input placeholder="Enlace de Google Maps (opcional)" value={f.enlace} onChange={set('enlace')} />
-      <input
-        placeholder="Dirección escrita (ej. Av. ... esquina ...)"
-        maxLength={200}
-        value={f.direccion}
-        onChange={set('direccion')}
-      />
-      <input
-        placeholder="Referencia (ej. frente a la plaza, a una cuadra del mercado)"
-        maxLength={200}
-        value={f.referencia}
-        onChange={set('referencia')}
-      />
-      <textarea
-        rows={4}
-        maxLength={600}
-        placeholder="Recomendaciones de la cancha: parqueo, vestuarios, qué llevar..."
-        value={f.recomendaciones}
-        onChange={set('recomendaciones')}
-      />
+    <div className="space-y-3">
+      <Campo Icono={MapPin} etiqueta="Nombre de la cancha">
+        <input
+          className="w-full"
+          placeholder="Ej. Munaypata"
+          value={f.nombre}
+          onChange={set('nombre')}
+          disabled={!!inicial}
+        />
+      </Campo>
+      <Campo Icono={ExternalLink} etiqueta="Enlace de Google Maps (opcional)">
+        <input className="w-full" placeholder="https://maps.app.goo.gl/..." value={f.enlace} onChange={set('enlace')} />
+      </Campo>
+      <Campo Icono={Navigation} etiqueta="Dirección escrita">
+        <input
+          className="w-full"
+          placeholder="Ej. Av. ... esquina ..."
+          maxLength={200}
+          value={f.direccion}
+          onChange={set('direccion')}
+        />
+      </Campo>
+      <Campo Icono={Navigation} etiqueta="Referencia">
+        <input
+          className="w-full"
+          placeholder="Ej. frente a la plaza, a una cuadra del mercado"
+          maxLength={200}
+          value={f.referencia}
+          onChange={set('referencia')}
+        />
+      </Campo>
+      <Campo Icono={Info} etiqueta="Recomendaciones">
+        <textarea
+          rows={4}
+          maxLength={600}
+          placeholder="Parqueo, vestuarios, qué llevar..."
+          value={f.recomendaciones}
+          onChange={set('recomendaciones')}
+        />
+      </Campo>
+
       {conFoto && (
-        <label className="block">
-          Foto (opcional):{' '}
+        <label className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-borde p-3">
+          {previa ? (
+            <img src={previa} alt="Vista previa" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
+          ) : (
+            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-borde text-suave">
+              <Camera size={26} />
+            </span>
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{previa ? 'Cambiar la foto' : 'Elegir una foto'}</span>
+            <span className="block text-xs text-suave">Opcional. Se reduce sola para que cargue rápido.</span>
+          </span>
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp"
-            onChange={(e) => setArchivo(e.target.files[0] ?? null)}
+            className="hidden"
+            onChange={elegir}
           />
         </label>
       )}
+
       {error && <p className="aviso aviso-error">{error}</p>}
       <div className="flex gap-2">
-        <button disabled={guardando} onClick={guardar}>
-          {guardando ? 'Guardando...' : textoBoton}
+        <button className="btn btn-activo" disabled={guardando} onClick={guardar}>
+          {guardando ? <><Rueda size={16} /> Guardando...</> : textoBoton}
         </button>
         {onCancelar && <button onClick={onCancelar}>Cancelar</button>}
       </div>
@@ -108,14 +173,17 @@ export default function Canchas({ canchas, onCambio }) {
   const [trabajando, setTrabajando] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
   const [clave, setClave] = useState(0) // reinicia el formulario de nueva cancha
+  const [migrando, setMigrando] = useState(null) // { hecho, total }
+
+  const sinMini = canchas.filter((c) => c.foto_url && !c.foto_mini_url)
 
   async function crear(d, archivo) {
-    let foto_url = null
+    let fotos = { foto_url: null, foto_mini_url: null }
     try {
-      foto_url = archivo ? await subirFoto(archivo) : null
-      const { error } = await supabase.from('canchas').insert({ ...d, foto_url })
+      if (archivo) fotos = await subirFotos(archivo)
+      const { error } = await supabase.from('canchas').insert({ ...d, ...fotos })
       if (error) {
-        await borrarFoto(foto_url)
+        await borrarFotos(fotos.foto_url, fotos.foto_mini_url)
         return error.code === '23505' ? 'Ya existe una cancha con ese nombre' : error.message
       }
       setClave(clave + 1)
@@ -140,14 +208,13 @@ export default function Canchas({ canchas, onCambio }) {
     setError(null)
     setTrabajando(true)
     try {
-      const nueva = await subirFoto(archivoNuevo)
-      const { data, error } = await supabase
-        .from('canchas').update({ foto_url: nueva }).eq('id', c.id).select('id')
+      const nuevas = await subirFotos(archivoNuevo)
+      const { data, error } = await supabase.from('canchas').update(nuevas).eq('id', c.id).select('id')
       if (error || !data?.length) {
-        await borrarFoto(nueva)
+        await borrarFotos(nuevas.foto_url, nuevas.foto_mini_url)
         throw new Error(error?.message ?? 'No se pudo guardar la foto')
       }
-      await borrarFoto(c.foto_url) // el orden importa: borrar la vieja al final
+      await borrarFotos(c.foto_url, c.foto_mini_url) // el orden importa: borrar las viejas al final
       onCambio()
     } catch (err) {
       setError(err.message)
@@ -160,25 +227,73 @@ export default function Canchas({ canchas, onCambio }) {
       `¿Eliminar la cancha "${c.nombre}"? Los partidos ya creados conservarán el nombre, pero perderán la foto y el enlace.`
     )) return
     setError(null)
-    const { data, error } = await supabase
-      .from('canchas').delete().eq('id', c.id).select('id')
+    const { data, error } = await supabase.from('canchas').delete().eq('id', c.id).select('id')
     if (error) return setError(error.message)
     if (!data?.length) return setError('No se pudo eliminar')
-    await borrarFoto(c.foto_url)
+    await borrarFotos(c.foto_url, c.foto_mini_url)
+    onCambio()
+  }
+
+  // Crea la miniatura de las fotos que se subieron antes de que existieran
+  async function crearMiniaturas() {
+    setError(null)
+    const lista = sinMini
+    let fallos = 0
+    setMigrando({ hecho: 0, total: lista.length })
+    for (let i = 0; i < lista.length; i++) {
+      const c = lista[i]
+      try {
+        const resp = await fetch(c.foto_url)
+        if (!resp.ok) throw new Error('No se pudo leer la foto')
+        const mini = await reducirImagen(await resp.blob(), 480, 0.7)
+        const url = await subir(mini, `${crypto.randomUUID()}-mini.jpg`)
+        const { data, error } = await supabase
+          .from('canchas').update({ foto_mini_url: url }).eq('id', c.id).select('id')
+        if (error || !data?.length) {
+          await borrarFotos(url)
+          throw new Error('No se pudo guardar')
+        }
+      } catch {
+        fallos += 1
+      }
+      setMigrando({ hecho: i + 1, total: lista.length })
+    }
+    setMigrando(null)
+    if (fallos > 0) {
+      setError(`No se pudieron crear ${fallos} miniatura(s). Usa "Cambiar foto" en esas canchas.`)
+    }
     onCambio()
   }
 
   return (
     <div className="space-y-4">
       {error && <p className="aviso aviso-error">{error}</p>}
-      {trabajando && <p className="text-suave">Procesando...</p>}
+      {trabajando && (
+        <p className="flex items-center gap-2 text-sm text-suave"><Rueda size={16} /> Procesando la foto...</p>
+      )}
 
-      <div className="tarjeta space-y-2">
-        <h4 className="font-bold">Nueva cancha</h4>
+      {sinMini.length > 0 && (
+        <div className="aviso aviso-alerta flex flex-wrap items-center gap-3">
+          <p className="min-w-0 flex-1 text-sm">
+            {sinMini.length} cancha(s) tienen foto sin miniatura. Crearlas hace que la lista de partidos
+            cargue más rápido.
+          </p>
+          <button disabled={migrando !== null} onClick={crearMiniaturas}>
+            {migrando ? (
+              <><Rueda size={16} /> {migrando.hecho} de {migrando.total}</>
+            ) : (
+              <><RefreshCw size={16} /> Crear miniaturas</>
+            )}
+          </button>
+        </div>
+      )}
+
+      <div className="tarjeta space-y-3">
+        <h3>Nueva cancha</h3>
         <FormCancha key={clave} conFoto textoBoton="Crear cancha" onGuardar={crear} />
       </div>
 
-      <h4 className="font-bold">Canchas creadas</h4>
+      <h3>Canchas creadas</h3>
       {canchas.length === 0 && <p className="text-suave">Todavía no hay canchas.</p>}
 
       {canchas.map((c) =>
@@ -192,23 +307,54 @@ export default function Canchas({ canchas, onCambio }) {
             />
           </div>
         ) : (
-          <div key={c.id} className="tarjeta space-y-2">
-            <strong className="text-lg">{c.nombre}</strong>
-            {c.foto_url
-              ? <img src={c.foto_url} alt={c.nombre} className="w-56 max-w-full rounded-lg" />
-              : <p className="text-suave">Sin foto</p>}
-            {c.direccion && <p className="break-words">📍 {c.direccion}</p>}
-            {c.referencia && <p className="break-words text-sm text-suave">{c.referencia}</p>}
+          <div key={c.id} className="tarjeta space-y-3">
+            <div className="flex gap-3">
+              {c.foto_mini_url || c.foto_url ? (
+                <img
+                  src={c.foto_mini_url ?? c.foto_url}
+                  alt={c.nombre}
+                  className="h-24 w-24 shrink-0 rounded-xl object-cover"
+                />
+              ) : (
+                <span className="grid h-24 w-24 shrink-0 place-items-center rounded-xl bg-borde text-suave">
+                  <Camera size={28} />
+                </span>
+              )}
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="truncate font-display text-2xl font-bold uppercase leading-tight">{c.nombre}</p>
+                {c.direccion && (
+                  <p className="flex items-start gap-1.5 text-sm">
+                    <MapPin size={15} className="mt-0.5 shrink-0 text-verde" />
+                    <span className="break-words">{c.direccion}</span>
+                  </p>
+                )}
+                {c.referencia && <p className="break-words text-sm text-suave">{c.referencia}</p>}
+                {c.enlace_maps ? (
+                  <a href={c.enlace_maps} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm">
+                    <ExternalLink size={14} /> Ver en Google Maps
+                  </a>
+                ) : (
+                  <p className="text-xs text-suave">Sin enlace de Maps</p>
+                )}
+              </div>
+            </div>
+
             {c.recomendaciones && (
-              <p className="whitespace-pre-line break-words text-sm">{c.recomendaciones}</p>
+              <p className="whitespace-pre-line break-words rounded-lg bg-borde/40 p-2.5 text-sm">
+                {c.recomendaciones}
+              </p>
             )}
-            {c.enlace_maps
-              ? <a href={c.enlace_maps} target="_blank" rel="noreferrer">Ver en Google Maps</a>
-              : <p className="text-sm text-suave">Sin enlace de Maps</p>}
-            <div className="flex flex-wrap gap-2">
-              <button disabled={trabajando} onClick={() => setEditandoId(c.id)}>Editar datos</button>
-              <label className="btn cursor-pointer">
-                Cambiar foto
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                disabled={trabajando}
+                onClick={() => setEditandoId(c.id)}
+                className="flex h-auto flex-col gap-0.5 py-2 text-xs"
+              >
+                <Pencil size={18} /> Editar
+              </button>
+              <label className={`btn h-auto cursor-pointer flex-col gap-0.5 py-2 text-xs ${trabajando ? 'opacity-50' : ''}`}>
+                <Camera size={18} /> Cambiar foto
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
@@ -220,7 +366,13 @@ export default function Canchas({ canchas, onCambio }) {
                   }}
                 />
               </label>
-              <button disabled={trabajando} onClick={() => eliminar(c)}>Eliminar</button>
+              <button
+                disabled={trabajando}
+                onClick={() => eliminar(c)}
+                className="btn-peligro flex h-auto flex-col gap-0.5 py-2 text-xs"
+              >
+                <Trash2 size={18} /> Eliminar
+              </button>
             </div>
           </div>
         )

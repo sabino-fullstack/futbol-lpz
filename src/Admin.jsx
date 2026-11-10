@@ -175,7 +175,7 @@ export default function Admin({ perfilId }) {
       supabase.from('encargados')
         .select('id, partido_id, perfil_id, tipo, qr_url, cuota_bonificada, perfiles(nombre, apellido, whatsapp)'),
       supabase.from('perfiles').select('id, nombre, apellido, whatsapp').eq('activo', true).order('nombre'),
-      supabase.from('canchas').select('id, nombre, enlace_maps, foto_url, direccion, referencia, recomendaciones').order('nombre'),
+      supabase.from('canchas').select('id, nombre, enlace_maps, foto_url, foto_mini_url, direccion, referencia, recomendaciones').order('nombre'),
       supabase.from('acuerdos_partido')
         .select('partido_id, organizador_id, tarifa_fija, tarifa_pct, cobrar_si_cancelado, cobrada_en'),
     ])

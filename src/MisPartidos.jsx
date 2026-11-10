@@ -5,8 +5,8 @@ import { supabase } from './supabaseClient'
 import Cargando from './Cargando'
 import Rueda from './Rueda'
 import Interruptor from './Interruptor'
-import { fechaCorta, rangoHora, inicioPartido, finPartido } from './formato'
-import { Banknote, QrCode, RotateCcw, Upload, UserCheck } from 'lucide-react'
+import { fechaCorta, rangoHora, inicioPartido, finPartido, mapaEspera } from './formato'
+import { Banknote, QrCode, RotateCcw, Upload, UserCheck, Bell } from 'lucide-react'
 import MiEstadoCuenta from './MiEstadoCuenta'
 
 const COLUMNAS = 'id, cancha, modalidad, fecha, hora, hora_fin, cupos, cupos_arco, estado'
@@ -24,6 +24,7 @@ export default function MisPartidos({ perfilId, esSuperadmin }) {
   const [verTodos, setVerTodos] = useState(false)
   const [pasadosVisibles, setPasadosVisibles] = useState(10)
   const [aTodos, setATodos] = useState(true)
+  const [espera, setEspera] = useState({})
 
   async function cargar() {
     const a = await supabase.from('encargados')
@@ -58,6 +59,8 @@ export default function MisPartidos({ perfilId, esSuperadmin }) {
       ;(li.data ?? []).forEach((x) => { ml[x.id_partido] = x })
       setPend(mp)
       setLibres(ml)
+      const es = await supabase.rpc('espera_partidos', { p_ids: ids })
+setEspera(mapaEspera(es.data))
     }
     setCargado(true)
   }
@@ -186,6 +189,15 @@ const alertas = (x) => {
         {l && !cancelado && (
           <p className="text-sm">
             Jugadores: <strong>{p.cupos - l.libres_jugador}/{p.cupos}</strong>
+            {(() => {
+  const e = espera[p.id]
+  const n = (e?.jugador?.esperando ?? 0) + (e?.arquero?.esperando ?? 0)
+  return n > 0 && !cancelado ? (
+    <p className="flex items-center gap-1.5 text-sm font-semibold text-amarillo-texto">
+      <Bell size={16} /> {n} {n === 1 ? 'persona en lista de espera' : 'personas en lista de espera'}
+    </p>
+  ) : null
+})()}
             {p.cupos_arco > 0 && (
               <> · Arqueros: <strong>{p.cupos_arco - l.libres_arquero}/{p.cupos_arco}</strong></>
             )}

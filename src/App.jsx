@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, NavLink, Link, useLocation } from 'react-router'
-import { CalendarDays, ClipboardList, LogOut, Settings, Ticket, User } from 'lucide-react'
+import { CalendarDays, ClipboardList, Settings, Ticket, User, CircleHelp } from 'lucide-react'
 import { supabase } from './supabaseClient'
-import { salir } from './auth'
+import { } from './auth'
 import Partidos from './Partidos'
 import DetallePartido from './DetallePartido'
 import ReservarForm from './ReservarForm'
@@ -22,6 +22,9 @@ import Cargando from './Cargando'
 import Reglas from './Reglas'
 import CambiarClave from './CambiarClave'
 import Perfil from './Perfil'
+import Ayuda from './Ayuda'
+import CampanaAvisos from './CampanaAvisos' 
+import Avisos from './Avisoss'
 
 function ScrollArriba() {
   const { pathname } = useLocation()
@@ -73,9 +76,9 @@ function App() {
 
 if (cargando) return <Cargando pantalla />
 if (!sesion) {
-  return pathname === '/reglas'
-    ? <div className="mx-auto max-w-xl p-4"><Reglas /></div>
-    : <PantallaAcceso />
+  if (pathname === '/reglas') return <div className="mx-auto max-w-xl p-4"><Reglas /></div>
+  if (pathname === '/ayuda') return <div className="mx-auto max-w-xl p-4"><Ayuda /></div>
+  return <PantallaAcceso />
 }
 if (!verificado) return <Cargando pantalla />
   if (perfil && perfil.activo === false) return <CuentaSuspendida />
@@ -94,46 +97,44 @@ if (!verificado) return <Cargando pantalla />
   ].filter(Boolean)
 
   // La cinta (y cualquier publicidad) no aparece en pago ni en los paneles
-  const sinCinta = ['/perfil' ['/pago', '/admin', '/a-cargo', '/perfil'] ].some((r) => pathname.startsWith(r))
+  const sinCinta = ['/perfil' ['/pago', '/admin', '/a-cargo', '/perfil', '/ayuda', '/avisos'] ].some((r) => pathname.startsWith(r))
 
   return (
     <div className="min-h-screen">
       <ScrollArriba />
       {!sinCinta && <CintaAvisos />}
 
-      <header className="border-b border-borde bg-fondo">
-        <div className="mx-auto flex max-w-xl items-center gap-2.5 px-3 py-2">
-          <Link to="/partidos" className="flex flex-1 items-center gap-2.5 no-underline">
-            <img src="/logo.png" alt="" className="h-9 w-9 rounded-full" />
-            <span className="font-display text-xl font-extrabold uppercase leading-none tracking-wide text-texto">
-              Fútbol <span className="text-verde">LPZ</span>
-            </span>
-          </Link>
-          <span className="hidden text-sm text-suave min-[400px]:inline">
-            Hola, {perfil?.nombre ?? ''}
-          </span>
-          <BotonTema />
-          <Link to="/perfil" aria-label="Mi perfil" className="btn btn-icono">
-  <User size={18} />
-</Link>
-          <button onClick={salir} aria-label="Cerrar sesión" className="btn btn-icono">
-            <LogOut size={18} />
-          </button>
-        </div>
-        <AvisoConexion />
-      </header>
+<header className="border-b border-borde bg-fondo">
+  <div className="mx-auto flex max-w-xl items-center gap-2 px-3 py-2">
+    <Link to="/partidos" className="flex min-w-0 flex-1 items-center gap-2.5 no-underline">
+      <img src="/icon-192.png" alt="" className="h-9 w-9 shrink-0 rounded-full" />
+      <span className="truncate font-display text-xl font-extrabold uppercase leading-none tracking-wide text-texto">
+        Fútbol <span className="text-verde">LPZ</span>
+      </span>
+    </Link>
+<CampanaAvisos />
+    <Link to="/perfil" aria-label="Mi perfil" className="btn btn-icono shrink-0">
+      <User size={18} />
+    </Link>
+    <BotonTema />
+  </div>
+  <AvisoConexion />
+</header>
 
       <main className="mx-auto max-w-xl px-3 pb-28 pt-3">
         <ErrorBoundary key={pathname}>
           <Routes>
             <Route path="/" element={<Navigate to="/partidos" replace />} />
-            <Route path="/partidos" element={<Partidos />} />
+            <Route path="/partidos" element={<Partidos perfil={perfil} />} />
             <Route path="/partidos/:partidoId" element={<DetallePartido />} />
             <Route path="/partidos/:partidoId/reservar" element={<ReservarForm perfil={perfil} />} />
             <Route path="/pago/:grupoId" element={<PantallaPago nombreJugador={perfil?.nombre ?? ''} />} />
             <Route path="/reservas" element={<MisReservas perfilId={usuarioId} />} />
             <Route path="/reglas" element={<Reglas />} />
             <Route path="/perfil" element={<Perfil perfil={perfil} />} />
+            <Route path="/ayuda" element={<Ayuda perfil={perfil} />} />
+            <Route path="/avisos" element={<Avisos />} />
+            
 
 {(esEncargado || esSuperadmin) && (
   <Route path="/a-cargo" element={<MisPartidos perfilId={usuarioId} esSuperadmin={esSuperadmin} />} />
@@ -162,7 +163,7 @@ if (!verificado) return <Cargando pantalla />
               key={ruta}
               to={ruta}
               className={({ isActive }) =>
-                `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-semibold no-underline ${
+                `flex flex-1 flex-col items-center gap-0.5 py-2 text-[0.7rem] font-semibold no-underline ${
                   isActive ? 'text-verde' : 'text-suave'
                 }`
               }

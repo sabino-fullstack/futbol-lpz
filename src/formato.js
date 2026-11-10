@@ -186,3 +186,23 @@ export function enlaceEstadoCuenta(nombre, whatsapp, mes, filas, t) {
     `Total de tarifas: ${bs(t.total)} Bs · Cobrado: ${bs(t.cobrado)} Bs · Saldo: ${bs(t.saldo)} Bs`
   return `https://wa.me/${String(whatsapp ?? '').replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`
 }
+// "justo ahora", "hace 5 min", "hace 2 h", "hace 3 días"
+export function haceCuanto(iso) {
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (min < 1) return 'justo ahora'
+  if (min < 60) return `hace ${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `hace ${h} h`
+  const d = Math.floor(h / 24)
+  return `hace ${d} ${d === 1 ? 'día' : 'días'}`
+}
+
+// Filas de espera_partidos -> { [partido]: { jugador: { esperando, yo }, arquero: { ... } } }
+export function mapaEspera(filas) {
+  const m = {}
+  ;(filas ?? []).forEach((f) => {
+    m[f.id_partido] = m[f.id_partido] ?? {}
+    m[f.id_partido][f.posicion] = { esperando: f.esperando, yo: f.yo }
+  })
+  return m
+}

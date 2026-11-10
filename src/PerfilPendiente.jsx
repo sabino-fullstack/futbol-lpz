@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { User } from 'lucide-react'
 import { supabase } from './supabaseClient'
+import { ayudaVista } from './AyudaInicial'
 
-export default function PerfilPendiente() {
+export default function PerfilPendiente({ perfil }) {
   const [mostrar, setMostrar] = useState(false)
 
   useEffect(() => {
@@ -15,7 +16,7 @@ export default function PerfilPendiente() {
         setMostrar(!completo && !pospuesto)
       })
   }, [])
-
+if (perfil?.nivel === 'nuevo' && !ayudaVista()) return null
   if (!mostrar) return null
 
   async function despues() {

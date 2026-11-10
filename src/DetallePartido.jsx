@@ -12,10 +12,11 @@ import Cargando from './Cargando'
 import PieApp from './PieApp'
 import {
   bs, rangoHora, textoEquipos, fechaCorta, inicioPartido, finPartido,
-  enlaceCompartir, quienGanaPremio,
+  enlaceCompartir, quienGanaPremio,mapaEspera
 } from './formato'
 import { useVolver } from './navegacion'
 import { useAutoRefrescar } from './useAutoRefrescar'
+import AvisarCupo from './AvisarCupo'
 
 
 const GRUPOS = [
@@ -45,7 +46,7 @@ export default function DetallePartido() {
 
   async function cargar(silencioso) { 
     if (silencioso !== true) setError(null)
-    const [p, lj, la, li, me] = await Promise.all([
+    const [p, lj, la, li, me, es] = await Promise.all([
       supabase.from('partidos')
         .select('*, canchas(nombre, enlace_maps, foto_url, direccion, referencia, recomendaciones), encargados(id, tipo, perfiles(nombre, apellido, apodo, whatsapp))')
         .eq('id', partidoId).maybeSingle(),
@@ -53,6 +54,7 @@ export default function DetallePartido() {
       supabase.rpc('cupos_libres', { p_partido: partidoId, p_posicion: 'arquero' }),
       supabase.rpc('lista_partido', { p_partido: partidoId }),
       supabase.rpc('mis_estados'),
+      supabase.rpc('espera_partidos', { p_ids: [partidoId] })
     ])
     if (silencioso === true && (p.error || lj.error || li.error)) return // se conserva lo que ya se ve
     if (p.error || !p.data || p.data.estado === 'cancelado') return setDatos({ fallo: true })
@@ -65,6 +67,7 @@ export default function DetallePartido() {
       },
       lista: li.data ?? [],
       mi: (me.data ?? []).find((x) => x.partido_id === partidoId) ?? null,
+      espera: mapaEspera(es.data),
     })
   }
 
@@ -81,7 +84,7 @@ export default function DetallePartido() {
     )
   }
 
-  const { partido: p, libres, lista, mi } = datos
+const { partido: p, libres, lista, mi, espera } = datos
   const c = p.canchas
   const empezo = inicioPartido(p).getTime() <= Date.now()
   const terminado = finPartido(p).getTime() < Date.now()
@@ -157,6 +160,17 @@ export default function DetallePartido() {
                 : 'Partido lleno'}
             </p>
           )}
+
+          {p.estado === 'abierto' && !empezo && (libres.jugador <= 0 || (p.cupos_arco > 0 && libres.arquero <= 0)) && (
+  <AvisarCupo
+    partidoId={p.id}
+    jugador={libres.jugador <= 0}
+    arquero={p.cupos_arco > 0 && libres.arquero <= 0}
+    espera={espera?.[p.id]}
+    onCambio={() => cargar(true)}
+  />
+)}
+          
 
           <div className="flex gap-2">
             {c?.enlace_maps && (

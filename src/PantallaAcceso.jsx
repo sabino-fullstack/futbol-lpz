@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { CircleHelp, Eye, EyeOff } from 'lucide-react'
 import { registrar, entrar } from './auth'
 import Rueda from './Rueda'
 import { Link } from 'react-router' // <- Ya estaba importado aquí
 import OlvideClave from './OlvideClave'
+import TamanoTexto from './TamanoTexto'
+
 
 const campo = 'w-full rounded-xl border border-borde bg-tarjeta px-4 py-3 text-lg'
 
@@ -45,6 +47,7 @@ export default function PantallaAcceso() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
+      <div className="flex justify-end"><TamanoTexto compacto /></div>
       <div className="flex flex-col items-center gap-2">
         <img src="/icon-192.png" alt="" className="h-24 w-24 rounded-full" />
         <h1 className="font-display text-4xl font-extrabold uppercase leading-none tracking-wide">
@@ -105,6 +108,7 @@ export default function PantallaAcceso() {
       </button>
               {!creando && <OlvideClave />}
 
+      <Link to="/ayuda" className="btn w-full"><CircleHelp size={18} /> ¿Cómo funciona?</Link>
       <button
         type="button"
         onClick={() => { setError(null); setModo(creando ? 'entrar' : 'crear') }}

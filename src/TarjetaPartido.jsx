@@ -2,13 +2,16 @@ import { Link } from 'react-router'
 import { Banknote, ChevronRight, Clock, MapPin, MessageCircle, Trophy, Users } from 'lucide-react'
 import BarraCupos from './BarraCupos'
 import MiEstado from './MiEstado'
+import AvisarCupo from './AvisarCupo'
 import { bs, rangoHora, quienGanaPremio, enlaceConsulta } from './formato'
 
-export default function TarjetaPartido({ p, libres, miEstado }) {
+export default function TarjetaPartido({ p, libres, miEstado, espera, onEsperaCambio }) {
+  const jugLleno = libres.jugador <= 0
+  const arqLleno = p.cupos_arco > 0 && libres.arquero <= 0
   const hayLugar = libres.jugador > 0 || libres.arquero > 0
   const abierto = hayLugar && p.estado === 'abierto'
-const encargado = (p.encargados ?? []).find((e) => e.tipo === 'encargado' && e.perfiles?.whatsapp)
-  const foto = p.canchas?.foto_url
+  const encargado = (p.encargados ?? []).find((e) => e.tipo === 'encargado' && e.perfiles?.whatsapp)
+  const foto = p.canchas?.foto_mini_url ?? p.canchas?.foto_url
 
   return (
     <article className="overflow-hidden rounded-2xl border border-borde bg-tarjeta shadow-sm">
@@ -102,6 +105,16 @@ const encargado = (p.encargados ?? []).find((e) => e.tipo === 'encargado' && e.p
             </a>
           )}
         </div>
+
+        {p.estado === 'abierto' && (jugLleno || arqLleno) && (
+          <AvisarCupo
+            partidoId={p.id}
+            jugador={jugLleno}
+            arquero={arqLleno}
+            espera={espera}
+            onCambio={onEsperaCambio}
+          />
+        )}
       </div>
     </article>
   )

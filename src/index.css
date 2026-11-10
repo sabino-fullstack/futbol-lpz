@@ -138,3 +138,19 @@
 @layer components {
   .btn-amarillo { background: var(--amarillo); color: #1a1300; border-color: transparent; }
 }
+/* Tamaño de texto elegido por la persona: escala todo lo medido en rem */
+html[data-texto="grande"] { font-size: 18px; }
+html[data-texto="muy-grande"] { font-size: 20px; }
+
+/* Un check que "salta" al elegir una opción */
+@keyframes pop {
+  0% { transform: scale(.6); opacity: 0; }
+  70% { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.pop { animation: pop .35s ease-out; }
+@media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
+
+@layer components {
+  .btn-peligro { color: var(--rojo); border-color: var(--rojo); }
+}

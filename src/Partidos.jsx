@@ -2,17 +2,19 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import TarjetaPartido from './TarjetaPartido'
 import ProximoPartido from './ProximoPartido'
+import AyudaInicial from './AyudaInicial'
+import PerfilPendiente from './PerfilPendiente'
 import InstalarApp from './InstalarApp'
 import PieApp from './PieApp'
 import Cargando from './Cargando'
 import { useAutoRefrescar } from './useAutoRefrescar'
-import { hoyBolivia, etiquetaDia, inicioPartido } from './formato'
-import PerfilPendiente from './PerfilPendiente'
+import { hoyBolivia, etiquetaDia, inicioPartido, mapaEspera } from './formato'
 
-export default function Partidos() {
+export default function Partidos({ perfil }) {
   const [partidos, setPartidos] = useState([])
   const [libres, setLibres] = useState({})
   const [misEstados, setMisEstados] = useState({})
+  const [espera, setEspera] = useState({})
   const [cargado, setCargado] = useState(false)
   const [error, setError] = useState(null)
 
@@ -21,7 +23,7 @@ export default function Partidos() {
     const callado = silencioso === true
     const { data: todos, error } = await supabase
       .from('partidos')
-      .select('*, canchas(nombre, enlace_maps, foto_url), encargados(id, tipo, perfiles(nombre, apellido, apodo, whatsapp))')
+      .select('*, canchas(nombre, enlace_maps, foto_url, foto_mini_url), encargados(id, tipo, perfiles(nombre, apellido, apodo, whatsapp))')
       .neq('estado', 'cancelado')
       .gte('fecha', hoyBolivia())
       .order('fecha', { ascending: true })
@@ -33,12 +35,14 @@ export default function Partidos() {
 
     // Los partidos de hoy que ya empezaron dejan de aparecer
     const data = todos.filter((p) => inicioPartido(p).getTime() > Date.now())
+    const ids = data.map((p) => p.id)
+    const vacio = Promise.resolve({ data: [], error: null })
 
-    const [lib, me] = await Promise.all([
-      data.length > 0
-        ? supabase.rpc('libres_partidos', { p_ids: data.map((p) => p.id) })
-        : Promise.resolve({ data: [], error: null }),
+    // 3 consultas y 3 variables, en el mismo orden
+    const [lib, me, es] = await Promise.all([
+      ids.length > 0 ? supabase.rpc('libres_partidos', { p_ids: ids }) : vacio,
       supabase.rpc('mis_estados'),
+      ids.length > 0 ? supabase.rpc('espera_partidos', { p_ids: ids }) : vacio,
     ])
     if (lib.error) {
       if (!callado) setError(lib.error.message)
@@ -56,6 +60,7 @@ export default function Partidos() {
     setPartidos(data)
     setLibres(mapa)
     setMisEstados(estados)
+    setEspera(mapaEspera(es.data)) // si esta consulta falla, la lista igual se muestra
     setError(null)
     setCargado(true)
   }
@@ -80,7 +85,8 @@ export default function Partidos() {
       <h1 className="sr-only">Próximos partidos</h1>
 
       {proximo && <ProximoPartido p={proximo} estado={misEstados[proximo.id]} />}
-      <PerfilPendiente />
+      <AyudaInicial perfil={perfil} />
+      <PerfilPendiente perfil={perfil} />
       <InstalarApp />
 
       {partidos.length === 0 && (
@@ -101,6 +107,8 @@ export default function Partidos() {
                 p={p}
                 libres={libres[p.id] ?? { jugador: 0, arquero: 0 }}
                 miEstado={misEstados[p.id]}
+                espera={espera[p.id]}
+                onEsperaCambio={() => cargar(true)}
               />
             ))}
           </section>
