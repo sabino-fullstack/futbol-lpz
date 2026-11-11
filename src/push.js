@@ -195,6 +195,7 @@ export async function probarPush() {
 }
 
 // Revisa cada pieza y devuelve qué está bien y qué no
+// Revisa cada pieza y devuelve qué está bien y qué no
 export async function diagnosticar() {
   const r = {
     clave: revisarClave(),
@@ -204,29 +205,43 @@ export async function diagnosticar() {
     permiso: soportaPush() ? Notification.permission : 'no disponible',
     sw: null,
     swResponde: false,
+    version: null,
+    errorActualizar: null,
     suscripcion: null,
     servidor: null,
   }
   if (soportaPush()) {
     try {
       const reg = await swListo(3000)
-      r.sw = { script: reg.active?.scriptURL?.split('/').pop() ?? null, esperando: !!reg.waiting }
+      r.sw = { script: reg.active?.scriptURL?.split('/').pop() ?? null, esperando: false }
+
       // El servicio nuevo responde a este mensaje; el viejo no
-      r.swResponde = await new Promise((resolver) => {
+      const pong = await new Promise((resolver) => {
         const alRecibir = (ev) => {
           if (ev.data?.type === 'PONG') {
             clearTimeout(espera)
             navigator.serviceWorker.removeEventListener('message', alRecibir)
-            resolver(true)
+            resolver(ev.data)
           }
         }
         const espera = setTimeout(() => {
           navigator.serviceWorker.removeEventListener('message', alRecibir)
-          resolver(false)
+          resolver(null)
         }, 1500)
         navigator.serviceWorker.addEventListener('message', alRecibir)
         reg.active?.postMessage({ type: 'PING' })
       })
+      r.swResponde = !!pong
+      r.version = pong?.version ?? null
+
+      // Si la versión nueva no se puede instalar, el navegador dice por qué
+      try {
+        await reg.update()
+      } catch (e) {
+        r.errorActualizar = `${e?.name ?? 'Error'}: ${e?.message ?? e}`
+      }
+      r.sw.esperando = !!reg.waiting
+
       const sub = await reg.pushManager.getSubscription()
       if (sub) {
         r.suscripcion = { servicio: new URL(sub.endpoint).host, claveCorrecta: mismaClave(sub) }
@@ -237,7 +252,6 @@ export async function diagnosticar() {
   r.servidor = typeof data === 'number' ? data : null
   return r
 }
-
 // Instala la versión nueva de la app si existe. Devuelve qué pasó.
 export async function actualizarServicio() {
   const reg = await navigator.serviceWorker.getRegistration()

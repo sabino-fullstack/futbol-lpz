@@ -25,11 +25,14 @@ function revisiones(r) {
     } else {
       l.push(
         r.swResponde
-          ? ['ok', 'Servicio de la app', 'Es la versión nueva, preparada para mostrar avisos.']
-          : ['mal', 'Servicio de la app', 'Es una versión anterior y no puede mostrar avisos. Toca "Actualizar la app ahora".']
+          ? ['ok', 'Servicio de la app', `Versión ${r.version ?? 'nueva'}, preparada para mostrar avisos.`]
+          : ['mal', 'Servicio de la app', 'Es una versión anterior y no puede mostrar avisos.']
       )
+      if (r.errorActualizar) {
+        l.push(['mal', 'No se pudo instalar la versión nueva', r.errorActualizar])
+      }
       if (r.sw.esperando) {
-        l.push(['mal', 'Actualización pendiente', 'Hay una versión nueva esperando para activarse.'])
+        l.push(['mal', 'Actualización pendiente', 'Hay una versión nueva esperando. Toca "Actualizar la app ahora".'])
       }
     }
     if (r.suscripcion) {

@@ -1,16 +1,28 @@
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
 
+const VERSION_SW = 'avisos-1'
+
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
-registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')))
 
-// El aviso "Hay una versión nueva" de la app necesita esto para poder actualizarse
+// Cualquier dirección de la app abre su pantalla principal, salvo los archivos del propio servicio.
+// Si esto fallara, el servicio igual debe instalarse (los avisos no dependen de ello).
+try {
+  registerRoute(
+    new NavigationRoute(createHandlerBoundToURL('index.html'), {
+      denylist: [/^\/sw\.js$/, /^\/workbox-/, /^\/manifest\.webmanifest$/, /^\/registerSW\.js$/],
+    })
+  )
+} catch (e) {
+  console.warn('No se pudo preparar la navegación de la app', e)
+}
+
 // Actualización de la app y respuesta al diagnóstico de la pantalla de avisos
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting()
   if (event.data && event.data.type === 'PING' && event.source) {
-    event.source.postMessage({ type: 'PONG', push: true })
+    event.source.postMessage({ type: 'PONG', push: true, version: VERSION_SW })
   }
 })
 
