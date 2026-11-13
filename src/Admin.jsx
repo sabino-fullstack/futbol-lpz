@@ -14,8 +14,10 @@ import {
   enlaceCambio, enlaceCancelacion,
 } from './formato'
 import Analisis from './Analisis'
+import EnviarAviso from './EnviarAviso'
 
-const SECCIONES = [['partidos', 'Partidos'], ['finanzas', 'Finanzas'], ['analisis', 'Análisis'], ['canchas', 'Canchas'], ['formatos', 'Formatos'], ['cuentas', 'Cuentas']]
+
+const SECCIONES = [['partidos', 'Partidos'], ['finanzas', 'Finanzas'], ['analisis', 'Análisis'], ['canchas', 'Canchas'], ['formatos', 'Formatos'], ['cuentas', 'Cuentas'], ['avisos', 'Avisos']]
 
 function AsignarEncargado({ partidoId, perfiles, onAsignar }) {
   const [perfilId, setPerfilId] = useState('')
@@ -584,6 +586,7 @@ export default function Admin({ perfilId }) {
       {seccion === 'formatos' && <Formatos />}
       {seccion === 'cuentas' && <Cuentas />}
       {seccion === 'analisis' && <Analisis />}
+      {seccion === 'avisos' && <EnviarAviso />}
     </div>
   )
 }

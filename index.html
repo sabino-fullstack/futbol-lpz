@@ -11,8 +11,6 @@
 <script>
   try {
     if (localStorage.getItem('tema') !== 'claro') document.documentElement.classList.add('dark')
-    var t = localStorage.getItem('texto')
-    if (t === 'grande' || t === 'muy-grande') document.documentElement.setAttribute('data-texto', t)
   } catch (e) { document.documentElement.classList.add('dark') }
 </script>
     <style>

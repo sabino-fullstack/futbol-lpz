@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import {
-  BadgeCheck, Check, ChevronLeft, CircleHelp, FileText, LogOut, Phone, Sparkles, Trash2, Type,
+  BadgeCheck, Check, ChevronLeft, CircleHelp, FileText, LogOut, Phone, Settings, Sparkles, Trash2,
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import { salir } from './auth'
 import Cargando from './Cargando'
 import Rueda from './Rueda'
 import PerfilForm from './PerfilForm'
-import TamanoTexto from './TamanoTexto'
 import { nombreCompleto } from './formato'
 import { useVolver } from './navegacion'
-import ActivarAvisos from './ActivarAvisos'
 
 export default function Perfil({ perfil }) {
   const volver = useVolver('/partidos')
@@ -88,6 +86,18 @@ export default function Perfil({ perfil }) {
 
       {error && <p className="aviso aviso-error">{error}</p>}
 
+      <div className="grid grid-cols-3 gap-2">
+        <Link to="/configuracion" className="btn h-auto flex-col gap-1 py-3 text-xs">
+          <Settings size={24} className="text-verde" /> Configuración
+        </Link>
+        <Link to="/ayuda" className="btn h-auto flex-col gap-1 py-3 text-xs">
+          <CircleHelp size={24} className="text-verde" /> Cómo funciona
+        </Link>
+        <Link to="/reglas" className="btn h-auto flex-col gap-1 py-3 text-xs">
+          <FileText size={24} className="text-verde" /> Reglas
+        </Link>
+      </div>
+
       <section className="tarjeta space-y-2.5">
         <h3>Apodo</h3>
         <div className="flex gap-2">
@@ -113,16 +123,6 @@ export default function Perfil({ perfil }) {
         </p>
       </section>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Link to="/ayuda" className="btn h-auto flex-col gap-1 py-3 text-sm">
-          <CircleHelp size={24} className="text-verde" /> Cómo funciona
-        </Link>
-        <Link to="/reglas" className="btn h-auto flex-col gap-1 py-3 text-sm">
-          <FileText size={24} className="text-verde" /> Reglas
-        </Link>
-        <ActivarAvisos userId={perfil.id} />
-      </div>
-
       <section className="tarjeta space-y-3">
         <h3>Sobre ti (opcional)</h3>
         {datos === undefined && !error && <Cargando />}
@@ -134,11 +134,6 @@ export default function Perfil({ perfil }) {
             <Trash2 size={16} /> Borrar mis respuestas
           </button>
         )}
-      </section>
-
-      <section className="tarjeta space-y-3">
-        <h3 className="flex items-center gap-2"><Type size={20} className="text-verde" /> Tamaño del texto</h3>
-        <TamanoTexto />
       </section>
 
       <button onClick={salir} className="btn btn-peligro w-full">

@@ -26,6 +26,7 @@ import Ayuda from './Ayuda'
 import CampanaAvisos from './CampanaAvisos' 
 import Avisos from './Avisos'
 import { sincronizarPush } from './push'
+import Configuracion from './Configuracion'
 
 function ScrollArriba() {
   const { pathname } = useLocation()
@@ -78,6 +79,12 @@ useEffect(() => {
   if (usuarioId && verificado) sincronizarPush(usuarioId)
 }, [usuarioId, verificado])
 
+useEffect(() => {
+  if (usuarioId && navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(() => {})
+  }
+}, [usuarioId])
+
 if (cargando) return <Cargando pantalla />
 if (!sesion) {
   if (pathname === '/reglas') return <div className="mx-auto max-w-xl p-4"><Reglas /></div>
@@ -101,7 +108,7 @@ if (!verificado) return <Cargando pantalla />
   ].filter(Boolean)
 
   // La cinta (y cualquier publicidad) no aparece en pago ni en los paneles
-  const sinCinta = ['/perfil' ['/pago', '/admin', '/a-cargo', '/perfil', '/ayuda', '/avisos'] ].some((r) => pathname.startsWith(r))
+  const sinCinta = ['/perfil' ['/pago', '/admin', '/a-cargo', '/perfil', '/ayuda', '/avisos', '/configuracion'] ].some((r) => pathname.startsWith(r))
 
   return (
     <div className="min-h-screen">
@@ -137,7 +144,7 @@ if (!verificado) return <Cargando pantalla />
             <Route path="/reglas" element={<Reglas />} />
             <Route path="/perfil" element={<Perfil perfil={perfil} />} />
             <Route path="/ayuda" element={<Ayuda perfil={perfil} />} />
-            <Route path="/avisos" element={<Avisos perfil={perfil} />} />
+            <Route path="/configuracion" element={<Configuracion perfil={perfil} />} />
             
 
 {(esEncargado || esSuperadmin) && (

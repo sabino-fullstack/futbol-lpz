@@ -2,11 +2,11 @@ import { useEffect } from 'react'
 import { Link } from 'react-router'
 import {
   BadgeCheck, Banknote, CalendarDays, ChevronDown, ChevronLeft, CircleHelp, FileText,
-  Hourglass, KeyRound, MessageCircle, QrCode, RotateCcw, Smartphone, Ticket, Type, UserX, Users,Bell
+  Hourglass, KeyRound, MessageCircle, QrCode, RotateCcw, Smartphone, Ticket, UserX, Users,Bell
 } from 'lucide-react'
 import BarraCupos from './BarraCupos'
 import Etiqueta from './EtiquetaEstado'
-import TamanoTexto from './TamanoTexto'
+
 import { WHATSAPP_AYUDA } from './contacto'
 import { nombreCompleto } from './formato'
 import { useVolver } from './navegacion'
@@ -86,10 +86,6 @@ export default function Ayuda({ perfil }) {
         </div>
       </header>
 
-      <section className="tarjeta space-y-3">
-        <h3 className="flex items-center gap-2"><Type size={20} className="text-verde" /> Tamaño del texto</h3>
-        <TamanoTexto />
-      </section>
 
       <section className="tarjeta space-y-4">
         <h3>Paso a paso</h3>

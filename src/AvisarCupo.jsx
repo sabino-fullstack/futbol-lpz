@@ -64,7 +64,7 @@ export default function AvisarCupo({ partidoId, jugador, arquero, espera, onCamb
       })}
       {filas.some(([pos]) => espera?.[pos]?.yo) && pushPendiente() && (
   <Link
-    to="/avisos"
+    to="/configuracion"
     className="flex items-center gap-2 rounded-lg bg-verde/10 p-2 text-sm font-semibold text-verde no-underline"
   >
     <BellRing size={16} className="shrink-0" />

@@ -138,9 +138,7 @@
 @layer components {
   .btn-amarillo { background: var(--amarillo); color: #1a1300; border-color: transparent; }
 }
-/* Tamaño de texto elegido por la persona: escala todo lo medido en rem */
-html[data-texto="grande"] { font-size: 18px; }
-html[data-texto="muy-grande"] { font-size: 20px; }
+
 
 /* Un check que "salta" al elegir una opción */
 @keyframes pop {

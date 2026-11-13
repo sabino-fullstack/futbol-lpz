@@ -1,14 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { Bell, BellRing, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Bell, BellRing, CalendarClock, CalendarDays, CalendarPlus, CalendarX, ChevronLeft, ChevronRight,
+  Megaphone, Settings,
+} from 'lucide-react'
 import { supabase } from './supabaseClient'
 import Cargando from './Cargando'
+import { pushPendiente } from './push'
 import { haceCuanto } from './formato'
 import { useVolver } from './navegacion'
-import ActivarAvisos from './ActivarAvisos'
-import DiagnosticoPush from './DiagnosticoPush'
 
-export default function Avisos({ perfil }) {
+const ICONO = {
+  cupo_liberado: Bell,
+  partido_cancelado: CalendarX,
+  partido_cambiado: CalendarClock,
+  partidos_nuevos: CalendarPlus,
+  aviso: Megaphone,
+}
+
+export default function Avisos() {
   const volver = useVolver('/partidos')
   const [lista, setLista] = useState(null)
   const [nuevos, setNuevos] = useState(new Set())
@@ -19,7 +29,7 @@ export default function Avisos({ perfil }) {
     ;(async () => {
       const { data, error } = await supabase
         .from('notificaciones')
-        .select('id, titulo, cuerpo, url, leida, created_at')
+        .select('id, tipo, titulo, cuerpo, url, leida, created_at')
         .order('created_at', { ascending: false })
         .limit(50)
       if (!vivo) return
@@ -36,19 +46,30 @@ export default function Avisos({ perfil }) {
 
   return (
     <div className="space-y-4">
-      <button onClick={volver} className="btn"><ChevronLeft size={18} /> Volver</button>
+      <div className="flex items-center justify-between gap-2">
+        <button onClick={volver} className="btn"><ChevronLeft size={18} /> Volver</button>
+        <Link to="/configuracion" aria-label="Configuración de avisos" className="btn btn-icono">
+          <Settings size={18} />
+        </Link>
+      </div>
 
       <header className="flex items-center gap-3">
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-verde text-sobre-verde">
           <BellRing size={26} />
         </span>
-        <div>
-          <h2>Avisos</h2>
-          <p className="text-suave">Te avisamos cuando se libera un cupo que esperabas.</p>
-        </div>
+        <h2>Avisos</h2>
       </header>
-      {perfil && <ActivarAvisos userId={perfil.id} />}
-      <DiagnosticoPush />
+
+      {pushPendiente() && (
+        <Link
+          to="/configuracion"
+          className="flex items-center gap-2 rounded-xl border border-verde/50 bg-verde/10 p-2.5 text-sm font-semibold text-verde no-underline"
+        >
+          <BellRing size={18} className="shrink-0" />
+          <span className="min-w-0 flex-1">Activa las notificaciones para recibirlos con la app cerrada</span>
+          <ChevronRight size={16} className="shrink-0" />
+        </Link>
+      )}
 
       {error && <p className="aviso aviso-error">{error}</p>}
       {!lista && !error && <Cargando />}
@@ -60,8 +81,7 @@ export default function Avisos({ perfil }) {
           </span>
           <p className="font-semibold">Todavía no tienes avisos</p>
           <p className="text-sm text-suave">
-            Si un partido está lleno, toca "Avísame si se libera un cupo" y aquí verás el aviso cuando
-            alguien deje su lugar.
+            Aquí verás los cupos que se liberen y los cambios de tus partidos.
           </p>
           <Link to="/partidos" className="btn btn-activo">
             <CalendarDays size={18} /> Ver partidos
@@ -71,6 +91,7 @@ export default function Avisos({ perfil }) {
 
       {lista?.map((a) => {
         const nuevo = nuevos.has(a.id)
+        const Icono = ICONO[a.tipo] ?? Bell
         const contenido = (
           <>
             <span
@@ -78,7 +99,7 @@ export default function Avisos({ perfil }) {
                 nuevo ? 'bg-verde text-sobre-verde' : 'bg-borde text-suave'
               }`}
             >
-              <Bell size={20} />
+              <Icono size={20} />
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">
