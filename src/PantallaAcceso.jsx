@@ -66,6 +66,9 @@ export default function PantallaAcceso() {
           <p className="-mt-2 text-sm text-suave">
             Usa tu nombre y apellido reales: así el encargado identifica tu pago.
           </p>
+          <p className="-mt-2 text-sm text-suave">
+  Después te mostraremos el grupo de WhatsApp y unas preguntas opcionales.
+</p>
         </>
       )}
 

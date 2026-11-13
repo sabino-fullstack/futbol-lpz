@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { Info, MapPin, QrCode } from 'lucide-react'
+import { Info, MapPin, QrCode, X} from 'lucide-react'
 import { supabase } from './supabaseClient'
 import Cargando from './Cargando'
 import Etiqueta, { BORDE_IZQ, colorDeEstado } from './EtiquetaEstado'
 import { bs, rangoHora, inicioPartido, finPartido, fechaCorta } from './formato'
+import { Acciones, Accion } from './Acciones'
 
 function esTardia(p) {
   const limite = inicioPartido(p).getTime() - p.horas_cancelacion * 3600 * 1000
@@ -159,23 +160,21 @@ const pagado = g.pago?.metodo === 'cancha'
               <span>
                 {f.nombre_invitado ?? 'Yo'}{f.posicion === 'arquero' && ' (arquero)'}
               </span>
-              {!yaEmpezo && <button onClick={() => cancelar(f, g)}>Cancelar</button>}
+{!yaEmpezo && (
+  <button onClick={() => cancelar(f, g)} className="btn-peligro shrink-0">
+    <X size={14} /> Cancelar
+  </button>
+)}
             </li>
           ))}
         </ul>
 
-        <div className="flex flex-wrap gap-2">
-          {verPago && (
-            <Link to={`/pago/${g.grupoId}`} className="btn btn-activo">
-              <QrCode size={18} /> Ver pago
-            </Link>
-          )}
-          {g.partido.canchas?.enlace_maps && (
-            <a href={g.partido.canchas.enlace_maps} target="_blank" rel="noreferrer" className="btn">
-              <MapPin size={18} /> Cómo llegar
-            </a>
-          )}
-        </div>
+<Acciones>
+  {verPago && <Accion to={`/pago/${g.grupoId}`} Icono={QrCode} tono="activo" texto="Ver pago" />}
+  {g.partido.canchas?.enlace_maps && (
+    <Accion href={g.partido.canchas.enlace_maps} Icono={MapPin} texto="Cómo llegar" />
+  )}
+</Acciones>
       </div>
     )
   }

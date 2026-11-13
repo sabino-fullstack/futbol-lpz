@@ -1,53 +1,82 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Navigate, useParams, useSearchParams } from 'react-router'
-import { Megaphone } from 'lucide-react'
+import {
+  CalendarDays, CalendarX, ChevronDown, Copy, ListChecks, MapPin, Megaphone, Pencil, Plus,
+  QrCode, RotateCcw, TrendingUp, UserCheck, UserPlus, Users, Wallet, X,
+} from 'lucide-react'
 import { supabase } from './supabaseClient'
 import Interruptor from './Interruptor'
 import Canchas from './Canchas'
 import Cuentas from './Cuentas'
 import Formatos from './Formatos'
 import Finanzas from './Finanzas'
+import Analisis from './Analisis'
+import EnviarAviso from './EnviarAviso'
 import FormularioPartido from './FormularioPartido'
 import MensajeGrupo from './MensajeGrupo'
+import { Acciones, Accion } from './Acciones'
 import {
   bs, rangoHora, textoEquipos, finPartido, fechaCorta, sumarDias,
   enlaceCambio, enlaceCancelacion,
 } from './formato'
-import Analisis from './Analisis'
-import EnviarAviso from './EnviarAviso'
 
+const SECCIONES = [
+  ['partidos', 'Partidos', CalendarDays],
+  ['finanzas', 'Finanzas', Wallet],
+  ['analisis', 'Análisis', TrendingUp],
+  ['canchas', 'Canchas', MapPin],
+  ['formatos', 'Formatos', ListChecks],
+  ['cuentas', 'Cuentas', Users],
+  ['avisos', 'Avisos', Megaphone],
+]
 
-const SECCIONES = [['partidos', 'Partidos'], ['finanzas', 'Finanzas'], ['analisis', 'Análisis'], ['canchas', 'Canchas'], ['formatos', 'Formatos'], ['cuentas', 'Cuentas'], ['avisos', 'Avisos']]
+const ROLES = [
+  ['encargado', 'Encargado', 'Con QR y pagos', QrCode],
+  ['ayudante', 'Ayudante', 'Asistencia y cobros', UserCheck],
+]
 
 function AsignarEncargado({ partidoId, perfiles, onAsignar }) {
   const [perfilId, setPerfilId] = useState('')
   const [tipo, setTipo] = useState('encargado')
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        <select value={perfilId} onChange={(e) => setPerfilId(e.target.value)}>
-          <option value="">Elegir persona...</option>
-          {perfiles.map((p) => (
-            <option key={p.id} value={p.id}>{p.nombre} {p.apellido ?? ''} ({p.whatsapp})</option>
-          ))}
-        </select>
-        <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
-          <option value="encargado">Encargado (con QR y pagos)</option>
-          <option value="ayudante">Ayudante (asistencia y cobros en cancha)</option>
-        </select>
-        <button
-          disabled={!perfilId}
-          onClick={() => { onAsignar(partidoId, perfilId, tipo); setPerfilId('') }}
-        >
-          Asignar
-        </button>
+    <div className="space-y-2.5 rounded-xl border border-borde p-3">
+      <p className="flex items-center gap-1.5 text-sm font-semibold">
+        <UserPlus size={16} className="text-verde" /> Agregar persona
+      </p>
+      <select className="w-full" value={perfilId} onChange={(e) => setPerfilId(e.target.value)}>
+        <option value="">Elegir persona...</option>
+        {perfiles.map((p) => (
+          <option key={p.id} value={p.id}>{p.nombre} {p.apellido ?? ''} ({p.whatsapp})</option>
+        ))}
+      </select>
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Rol">
+        {ROLES.map(([id, nombre, detalle, Icono]) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={tipo === id}
+            onClick={() => setTipo(id)}
+            className={`flex h-auto flex-col gap-0.5 py-2 ${tipo === id ? 'border-verde bg-verde/10 text-verde' : ''}`}
+          >
+            <Icono size={18} />
+            <span className="text-sm font-semibold">{nombre}</span>
+            <span className="text-[0.7rem] font-normal text-suave">{detalle}</span>
+          </button>
+        ))}
       </div>
       {tipo === 'ayudante' && (
         <p className="text-xs text-suave">
-          El ayudante no sube QR ni confirma pagos: solo marca asistencia y cobra en cancha.
-          Los jugadores verán únicamente el QR de los encargados.
+          El ayudante no sube QR ni confirma pagos. Los jugadores verán únicamente el QR de los encargados.
         </p>
       )}
+      <button
+        disabled={!perfilId}
+        className="btn btn-activo w-full"
+        onClick={() => { onAsignar(partidoId, perfilId, tipo); setPerfilId('') }}
+      >
+        Asignar
+      </button>
     </div>
   )
 }
@@ -97,9 +126,40 @@ function AcuerdoPartido({ acuerdo, perfiles, partidoId, onCambio, onError }) {
     onCambio()
   }
 
-  if (!editando) {
-    return acuerdo ? (
-      <div className="flex flex-wrap items-center gap-2 text-sm">
+  if (editando) {
+    return (
+      <div className="space-y-2.5 rounded-xl border border-borde p-3">
+        <select className="w-full" value={org} onChange={(e) => setOrg(e.target.value)}>
+          <option value="">Elegir organizador...</option>
+          {perfiles.map((p) => (
+            <option key={p.id} value={p.id}>{p.nombre} {p.apellido ?? ''} ({p.whatsapp})</option>
+          ))}
+        </select>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="space-y-1 text-sm font-semibold">
+            Tarifa fija (Bs)
+            <input className="w-full" inputMode="decimal" value={fija} onChange={(e) => setFija(e.target.value)} />
+          </label>
+          <label className="space-y-1 text-sm font-semibold">
+            + Porcentaje (%)
+            <input className="w-full" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} />
+          </label>
+        </div>
+        <label className="flex items-center gap-3 py-1 text-sm">
+          <input type="checkbox" checked={cancelado} onChange={(e) => setCancelado(e.target.checked)} />
+          Cobrar la tarifa aunque el partido se cancele
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <button disabled={trabajando} className="btn btn-activo" onClick={guardar}>Guardar</button>
+          <button onClick={() => setEditando(false)}>Cancelar</button>
+        </div>
+      </div>
+    )
+  }
+
+  return acuerdo ? (
+    <div className="space-y-2 rounded-xl border border-amarillo/40 bg-amarillo/5 p-2.5">
+      <p className="flex flex-wrap items-center gap-2 text-sm">
         <span className="rounded-full bg-amarillo/15 px-2 py-0.5 text-xs font-bold text-amarillo-texto">
           De {organizador ? `${organizador.nombre} ${organizador.apellido ?? ''}` : 'un organizador'}
         </span>
@@ -107,43 +167,19 @@ function AcuerdoPartido({ acuerdo, perfiles, partidoId, onCambio, onError }) {
           Tarifa {bs(acuerdo.tarifa_fija)} Bs{Number(acuerdo.tarifa_pct) > 0 ? ` + ${acuerdo.tarifa_pct} %` : ''}
           {acuerdo.cobrada_en ? ' · cobrada' : ' · pendiente'}
         </span>
-        <button disabled={trabajando} onClick={() => setEditando(true)}>Cambiar</button>
-        <button disabled={trabajando} onClick={quitar}>Volver a propio</button>
-      </div>
-    ) : (
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-suave">Partido propio</span>
-        <button onClick={() => setEditando(true)}>Pasar a organizador</button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-2 rounded-xl border border-borde p-3">
-      <select value={org} onChange={(e) => setOrg(e.target.value)}>
-        <option value="">Elegir organizador...</option>
-        {perfiles.map((p) => (
-          <option key={p.id} value={p.id}>{p.nombre} {p.apellido ?? ''} ({p.whatsapp})</option>
-        ))}
-      </select>
-      <div className="flex flex-wrap gap-2">
-        <label>
-          Tarifa fija (Bs){' '}
-          <input className="w-24" inputMode="decimal" value={fija} onChange={(e) => setFija(e.target.value)} />
-        </label>
-        <label>
-          + Porcentaje (%){' '}
-          <input className="w-24" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} />
-        </label>
-      </div>
-      <label className="flex items-center gap-3 py-1">
-        <input type="checkbox" checked={cancelado} onChange={(e) => setCancelado(e.target.checked)} />
-        Cobrar la tarifa aunque el partido se cancele
-      </label>
-      <div className="flex gap-2">
-        <button disabled={trabajando} className="btn btn-activo" onClick={guardar}>Guardar</button>
-        <button onClick={() => setEditando(false)}>Cancelar</button>
-      </div>
+      </p>
+      <Acciones columnas={2}>
+        <Accion Icono={Pencil} texto="Cambiar acuerdo" disabled={trabajando} onClick={() => setEditando(true)} />
+        <Accion Icono={RotateCcw} texto="Volver a propio" disabled={trabajando} onClick={quitar} />
+      </Acciones>
+    </div>
+  ) : (
+    <div className="flex items-center justify-between gap-2 rounded-xl border border-borde p-2.5 text-sm">
+      <span className="flex items-center gap-2">
+        <span className="rounded-full bg-verde/15 px-2 py-0.5 text-xs font-bold text-verde">Propio</span>
+        <span className="text-suave">Tú cobras</span>
+      </span>
+      <button onClick={() => setEditando(true)}><UserPlus size={16} /> Pasar a organizador</button>
     </div>
   )
 }
@@ -177,7 +213,9 @@ export default function Admin({ perfilId }) {
       supabase.from('encargados')
         .select('id, partido_id, perfil_id, tipo, qr_url, cuota_bonificada, perfiles(nombre, apellido, whatsapp)'),
       supabase.from('perfiles').select('id, nombre, apellido, whatsapp').eq('activo', true).order('nombre'),
-      supabase.from('canchas').select('id, nombre, enlace_maps, foto_url, foto_mini_url, direccion, referencia, recomendaciones').order('nombre'),
+      supabase.from('canchas')
+        .select('id, nombre, enlace_maps, foto_url, foto_mini_url, direccion, referencia, recomendaciones')
+        .order('nombre'),
       supabase.from('acuerdos_partido')
         .select('partido_id, organizador_id, tarifa_fija, tarifa_pct, cobrar_si_cancelado, cobrada_en'),
     ])
@@ -309,10 +347,10 @@ export default function Admin({ perfilId }) {
     cargar()
   }
 
-  async function asignar(partidoId, perfilId, tipo) {
+  async function asignar(partidoId, perfilIdNuevo, tipo) {
     setError(null)
     const { error } = await supabase.from('encargados')
-      .insert({ partido_id: partidoId, perfil_id: perfilId, tipo })
+      .insert({ partido_id: partidoId, perfil_id: perfilIdNuevo, tipo })
     if (error) {
       return setError(error.code === '23505'
         ? 'Esa persona ya tiene un rol en este partido. Quítala y vuelve a asignarla si quieres cambiarlo.'
@@ -364,20 +402,22 @@ export default function Admin({ perfilId }) {
   return (
     <div className="space-y-4">
       <h2>Administración</h2>
-      {error && <p className="aviso aviso-error">{error}</p>}
 
-      <nav className="flex flex-wrap gap-2">
-        {SECCIONES.map(([id, texto]) => (
+      <nav className="grid grid-cols-4 gap-2" aria-label="Secciones de administración">
+        {SECCIONES.map(([id, texto, Icono]) => (
           <NavLink
             key={id}
             to={`/admin/${id}`}
             onClick={() => setError(null)}
-            className={({ isActive }) => `btn ${isActive ? 'btn-activo' : ''}`}
+            className={({ isActive }) => `accion ${isActive ? 'accion-activo' : ''}`}
           >
-            {texto}
+            <Icono size={20} />
+            <span>{texto}</span>
           </NavLink>
         ))}
       </nav>
+
+      {error && <p className="aviso aviso-error">{error}</p>}
 
       {seccion === 'partidos' && (
         <div className="space-y-4">
@@ -386,12 +426,12 @@ export default function Admin({ perfilId }) {
               <p>
                 Partido actualizado.
                 {aviso.activas > 0 && ` Tiene ${aviso.activas} cupo(s) activo(s).`}
-                {aviso.cambio && ' Cambiaste fecha, hora o cancha: avisa a los jugadores.'}
+                {aviso.cambio && ' Cambiaste fecha, hora o cancha: los que tenían cupo reciben un aviso automático.'}
               </p>
               <div className="flex flex-wrap gap-2">
                 {aviso.cambio && partidoAviso && (
                   <a className="btn btn-activo" target="_blank" rel="noreferrer" href={enlaceCambio(partidoAviso)}>
-                    Avisar por WhatsApp
+                    Avisar también al grupo
                   </a>
                 )}
                 <button onClick={() => setAviso(null)}>Cerrar</button>
@@ -405,12 +445,13 @@ export default function Admin({ perfilId }) {
                 Partido cancelado. {avisoCancel.reservas} reserva(s) liberada(s)
                 {avisoCancel.devoluciones > 0 &&
                   `, ${avisoCancel.devoluciones} con devolución pendiente por ${bs(avisoCancel.monto)} Bs (el encargado las ve en "A mi cargo")`}.
+                {' '}Los jugadores afectados reciben un aviso automático.
               </p>
               <div className="flex flex-wrap gap-2">
                 {partidoCancel && (
                   <a className="btn btn-activo" target="_blank" rel="noreferrer"
                      href={enlaceCancelacion(partidoCancel, avisoCancel.motivo)}>
-                    Avisar por WhatsApp
+                    Avisar también al grupo
                   </a>
                 )}
                 <button onClick={() => setAvisoCancel(null)}>Cerrar</button>
@@ -439,13 +480,11 @@ export default function Admin({ perfilId }) {
             </div>
           )}
 
-          <button onClick={() => setVerMensaje(!verMensaje)}>
-            <Megaphone size={16} /> Mensaje para el grupo
-          </button>
-          {verMensaje && <MensajeGrupo partidos={partidos} />}
-
           {!creando ? (
-            <button onClick={() => setCreando(true)}>+ Nuevo partido</button>
+            <Acciones columnas={2}>
+              <Accion Icono={Plus} tono="activo" texto="Nuevo partido" onClick={() => setCreando(true)} />
+              <Accion Icono={Megaphone} texto="Mensaje para el grupo" onClick={() => setVerMensaje(!verMensaje)} />
+            </Acciones>
           ) : (
             <div className="tarjeta">
               <FormularioPartido
@@ -458,21 +497,27 @@ export default function Admin({ perfilId }) {
             </div>
           )}
 
-          <nav className="flex flex-wrap gap-2">
+          {verMensaje && <MensajeGrupo partidos={partidos} />}
+
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="Filtrar partidos">
             {[
-              ['proximos', `Próximos (${proximos.length})`],
-              ['pasados', `Pasados (${pasados.length})`],
-              ['cancelados', `Cancelados (${cancelados.length})`],
-            ].map(([id, texto]) => (
+              ['proximos', 'Próximos', proximos.length],
+              ['pasados', 'Pasados', pasados.length],
+              ['cancelados', 'Cancelados', cancelados.length],
+            ].map(([id, texto, n]) => (
               <button
                 key={id}
+                aria-pressed={filtro === id}
                 onClick={() => setParams({ ver: id }, { replace: true })}
-                className={filtro === id ? 'border-transparent bg-verde text-sobre-verde' : ''}
+                className={`flex h-auto flex-col gap-0 py-2 ${
+                  filtro === id ? 'border-transparent bg-verde text-sobre-verde' : ''
+                }`}
               >
-                {texto}
+                <span className="text-sm">{texto}</span>
+                <span className="text-lg font-bold leading-none tabular-nums">{n}</span>
               </button>
             ))}
-          </nav>
+          </div>
 
           {lista.length === 0 && <p className="text-suave">No hay partidos en esta sección.</p>}
 
@@ -509,19 +554,33 @@ export default function Admin({ perfilId }) {
               )
             }
 
+            const cancelado = p.estado === 'cancelado'
             return (
-              <div key={p.id} className="tarjeta space-y-2">
-                <h4 className="font-bold">
-                  {p.cancha}{p.modalidad && ` (${p.modalidad})`} · {p.fecha} · {rangoHora(p)}
-                  {p.estado === 'cancelado' && ' (CANCELADO)'}
-                </h4>
-                <p className="text-sm text-suave">
-                  Jugadores: {p.cupos} a {bs(p.cuota)} Bs
-                  {p.cupos_arco > 0
-                    ? ` · Arqueros: ${p.cupos_arco} a ${bs(p.cuota_arquero)} Bs`
-                    : ' · Sin cupos de arco'}
-                  {textoEquipos(p) && ` · ${textoEquipos(p)}`}
-                </p>
+              <div
+                key={p.id}
+                className={`tarjeta space-y-3 border-l-4 ${cancelado ? 'border-l-rojo' : 'border-l-verde'}`}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="font-display text-xl font-bold uppercase leading-tight">{p.cancha}</h4>
+                    {p.modalidad && (
+                      <span className="shrink-0 rounded-full bg-verde/15 px-2 py-0.5 text-[11px] font-bold uppercase text-verde">
+                        {p.modalidad}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-suave">
+                    {p.fecha} · {rangoHora(p)}
+                    {cancelado && <strong className="text-rojo"> · CANCELADO</strong>}
+                  </p>
+                  <p className="text-sm text-suave">
+                    Jugadores: {p.cupos} a {bs(p.cuota)} Bs
+                    {p.cupos_arco > 0
+                      ? ` · Arqueros: ${p.cupos_arco} a ${bs(p.cuota_arquero)} Bs`
+                      : ' · Sin cupos de arco'}
+                    {textoEquipos(p) && ` · ${textoEquipos(p)}`}
+                  </p>
+                </div>
 
                 <AcuerdoPartido
                   key={`${p.id}-${acuerdos[p.id]?.organizador_id ?? 'propio'}-${acuerdos[p.id]?.tarifa_fija ?? ''}-${acuerdos[p.id]?.tarifa_pct ?? ''}`}
@@ -532,40 +591,57 @@ export default function Admin({ perfilId }) {
                   onError={setError}
                 />
 
-                <div className="flex flex-wrap gap-2">
-                  {p.estado !== 'cancelado' && (
-                    <button onClick={() => { setAviso(null); setDuplicandoId(null); setEditandoId(p.id) }}>
-                      Editar
-                    </button>
+                <Acciones>
+                  {!cancelado && (
+                    <Accion Icono={Pencil} texto="Editar" onClick={() => { setAviso(null); setDuplicandoId(null); setEditandoId(p.id) }} />
                   )}
-                  <button onClick={() => { setAviso(null); setEditandoId(null); setCreando(false); setDuplicandoId(p.id) }}>
-                    Duplicar
-                  </button>
-                  {p.estado !== 'cancelado' ? (
-                    <button onClick={() => cancelarPartido(p)}>Cancelar partido</button>
+                  <Accion Icono={Copy} texto="Duplicar" onClick={() => { setAviso(null); setEditandoId(null); setCreando(false); setDuplicandoId(p.id) }} />
+                  {!cancelado ? (
+                    <Accion Icono={CalendarX} tono="peligro" texto="Cancelar" onClick={() => cancelarPartido(p)} />
                   ) : (
-                    <button onClick={() => reactivar(p.id)}>Reactivar partido</button>
+                    <Accion Icono={RotateCcw} texto="Reactivar" onClick={() => reactivar(p.id)} />
                   )}
-                </div>
+                </Acciones>
 
-                <details>
-                  <summary className="cursor-pointer font-semibold">
-                    Encargados y ayudantes ({delPartido.length})
+                <details className="group rounded-xl border border-borde">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 p-2.5 font-semibold [&::-webkit-details-marker]:hidden">
+                    <Users size={18} className="shrink-0 text-verde" />
+                    <span className="flex-1">Encargados y ayudantes</span>
+                    <span className="text-sm text-suave">{delPartido.length}</span>
+                    <ChevronDown size={18} className="shrink-0 text-suave transition-transform group-open:rotate-180" />
                   </summary>
-                  <div className="space-y-2 pt-2">
+                  <div className="space-y-3 border-t border-borde p-2.5">
                     {delPartido.map((e) => (
-                      <div key={e.id} className="flex flex-wrap items-center gap-2">
-                        <span>{e.perfiles?.nombre} {e.perfiles?.apellido ?? ''}</span>
-                        {e.tipo === 'ayudante' ? (
-                          <span className="rounded-full bg-borde px-2 py-0.5 text-xs font-bold text-suave">Ayudante</span>
-                        ) : (
-                          <Interruptor
-                            activo={e.cuota_bonificada === true}
-                            onCambio={(valor) => cambiarBonificacion(e, valor)}
-                            etiqueta="Cuota bonificada"
-                          />
+                      <div key={e.id} className="space-y-1.5">
+                        <div className="flex items-center gap-2.5">
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-verde/15 text-verde">
+                            {e.tipo === 'ayudante' ? <UserCheck size={18} /> : <QrCode size={18} />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold">
+                              {e.perfiles?.nombre} {e.perfiles?.apellido ?? ''}
+                            </span>
+                            <span className="text-xs text-suave">
+                              {e.tipo === 'ayudante' ? 'Ayudante' : 'Encargado'}
+                            </span>
+                          </span>
+                          <button
+                            aria-label="Quitar de este partido"
+                            className="btn btn-icono btn-peligro shrink-0"
+                            onClick={() => quitar(e.id)}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                        {e.tipo !== 'ayudante' && (
+                          <div className="pl-[2.875rem]">
+                            <Interruptor
+                              activo={e.cuota_bonificada === true}
+                              onCambio={(valor) => cambiarBonificacion(e, valor)}
+                              etiqueta="Cuota bonificada"
+                            />
+                          </div>
                         )}
-                        <button onClick={() => quitar(e.id)}>Quitar</button>
                       </div>
                     ))}
                     <AsignarEncargado partidoId={p.id} perfiles={perfiles} onAsignar={asignar} />
@@ -576,16 +652,18 @@ export default function Admin({ perfilId }) {
           })}
 
           {filtro === 'pasados' && pasados.length > pasadosVisibles && (
-            <button onClick={() => setPasadosVisibles(pasadosVisibles + 10)}>Mostrar 10 más</button>
+            <button className="w-full" onClick={() => setPasadosVisibles(pasadosVisibles + 10)}>
+              Mostrar 10 más
+            </button>
           )}
         </div>
       )}
 
       {seccion === 'finanzas' && <Finanzas canchas={canchas} />}
+      {seccion === 'analisis' && <Analisis />}
       {seccion === 'canchas' && <Canchas canchas={canchas} onCambio={cargar} />}
       {seccion === 'formatos' && <Formatos />}
       {seccion === 'cuentas' && <Cuentas />}
-      {seccion === 'analisis' && <Analisis />}
       {seccion === 'avisos' && <EnviarAviso />}
     </div>
   )

@@ -8,6 +8,8 @@ import {
   bs, hhmm, hoyBolivia, mesActual, nombreMes, rangoMes, sumarMeses, lunesDe, diaMes,
   inicioPartido, finPartido, enlaceEstadoCuenta,
 } from './formato'
+import { Acciones, Accion } from './Acciones'
+
 
 const num = (v) => Number(v ?? 0)
 // Dinero que movió el partido (en los de organizador, no es tuyo)
@@ -469,27 +471,24 @@ export default function Finanzas({ canchas }) {
                           ))}
                         </ul>
 
-                        <div className="flex flex-wrap gap-2">
-                          {marcables.length > 1 && (
-                            <button
-                              disabled={trabajando}
-                              className="btn btn-activo"
-                              onClick={() => marcarTarifas(
-                                marcables.map((f) => f.id_partido), true,
-                                `¿Marcar ${marcables.length} tarifas como cobradas (${bs(montoMarcable)} Bs)?`)}
-                            >
-                              <Check size={16} /> Marcar todas cobradas ({bs(montoMarcable)} Bs)
-                            </button>
-                          )}
-                          <a
-                            className="btn"
-                            target="_blank"
-                            rel="noreferrer"
-                            href={enlaceEstadoCuenta(o.nombre, o.whatsapp, mes, orden, { total, cobrado, saldo })}
-                          >
-                            <MessageCircle size={16} /> Enviar estado de cuenta
-                          </a>
-                        </div>
+                      <Acciones>
+  {marcables.length > 1 && (
+    <Accion
+      Icono={Check}
+      tono="activo"
+      texto={`Cobradas todas (${bs(montoMarcable)} Bs)`}
+      disabled={trabajando}
+      onClick={() => marcarTarifas(
+        marcables.map((f) => f.id_partido), true,
+        `¿Marcar ${marcables.length} tarifas como cobradas (${bs(montoMarcable)} Bs)?`)}
+    />
+  )}
+  <Accion
+    Icono={MessageCircle}
+    texto="Enviar estado de cuenta"
+    href={enlaceEstadoCuenta(o.nombre, o.whatsapp, mes, orden, { total, cobrado, saldo })}
+  />
+</Acciones>
                       </div>
                     )
                   })}
@@ -669,18 +668,22 @@ export default function Finanzas({ canchas }) {
               Google Drive personal). Son un registro de tus datos, no una copia restaurable de la base de
               datos, y contienen números de WhatsApp.
             </p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                ['resumen', `Resumen de ${nombreMes(mes)}`],
-                ['reservas', 'Reservas (todas)'],
-                ['pagos', 'Pagos (todos)'],
-                ['cuentas', 'Cuentas'],
-              ].map(([id, texto]) => (
-                <button key={id} disabled={exportando !== null} onClick={() => exportar(id)}>
-                  {exportando === id ? <><Rueda size={16} /> Preparando...</> : <><Download size={16} /> {texto}</>}
-                </button>
-              ))}
-            </div>
+<Acciones columnas={2}>
+  {[
+    ['resumen', `Resumen de ${nombreMes(mes)}`],
+    ['reservas', 'Reservas (todas)'],
+    ['pagos', 'Pagos (todos)'],
+    ['cuentas', 'Cuentas'],
+  ].map(([id, texto]) => (
+    <Accion
+      key={id}
+      Icono={exportando === id ? Rueda : Download}
+      texto={exportando === id ? 'Preparando...' : texto}
+      disabled={exportando !== null}
+      onClick={() => exportar(id)}
+    />
+  ))}
+</Acciones>
           </section>
         </>
       )}

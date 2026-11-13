@@ -17,7 +17,7 @@ const aCorreo = (numero) => `${numero}@${DOMINIO}`
 export async function registrar({ nombre, apellido, apodo, numero, contrasena }) {
   const n = normalizarNumero(numero)
   if (!n) return { error: { message: 'Escribe tu número de 8 dígitos' } }
-  return supabase.auth.signUp({
+  const r = await supabase.auth.signUp({
     email: aCorreo(n),
     password: contrasena,
     options: {
@@ -29,6 +29,11 @@ export async function registrar({ nombre, apellido, apodo, numero, contrasena })
       },
     },
   })
+  const id = r.data?.user?.id
+  if (!r.error && id) {
+    try { localStorage.setItem(`bienvenida:${id}`, 'pendiente') } catch { /* sin almacenamiento */ }
+  }
+  return r
 }
 export async function entrar({ numero, contrasena }) {
   const n = normalizarNumero(numero)

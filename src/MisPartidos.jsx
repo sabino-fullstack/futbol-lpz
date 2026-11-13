@@ -6,7 +6,7 @@ import Cargando from './Cargando'
 import Rueda from './Rueda'
 import Interruptor from './Interruptor'
 import { fechaCorta, rangoHora, inicioPartido, finPartido, mapaEspera } from './formato'
-import { Banknote, QrCode, RotateCcw, Upload, UserCheck, Bell } from 'lucide-react'
+import { Banknote, QrCode, RotateCcw, Upload, UserCheck, Bell, ClipboardList } from 'lucide-react'
 import MiEstadoCuenta from './MiEstadoCuenta'
 
 const COLUMNAS = 'id, cancha, modalidad, fecha, hora, hora_fin, cupos, cupos_arco, estado'
@@ -220,7 +220,9 @@ const alertas = (x) => {
   </p>
 )}
 
-        <Link to={`/a-cargo/${p.id}`} className="btn btn-activo">Gestionar</Link>
+<Link to={`/a-cargo/${p.id}`} className="btn btn-primario">
+  <ClipboardList size={20} /> Gestionar partido
+</Link>
 
         {x.asig?.tipo === 'encargado' && !cancelado && (
           <details className="rounded-xl border border-borde p-2.5">

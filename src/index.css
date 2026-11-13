@@ -152,3 +152,20 @@
 @layer components {
   .btn-peligro { color: var(--rojo); border-color: var(--rojo); }
 }
+@layer components {
+  /* Botón de acción en cuadrícula: ícono arriba, texto abajo */
+  .accion {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: .25rem; text-align: center; min-height: 3.5rem; padding: .5rem .4rem;
+    font-size: .75rem; font-weight: 600; line-height: 1.15;
+    border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
+    border-radius: .65rem; text-decoration: none; cursor: pointer;
+  }
+  .accion svg { color: var(--verde); }
+  .accion:disabled { opacity: .5; cursor: not-allowed; }
+  .accion:active:not(:disabled) { transform: scale(.97); }
+  .accion-activo { background: var(--verde); color: var(--sobre-verde); border-color: transparent; }
+  .accion-activo svg { color: currentColor; }
+  .accion-peligro { color: var(--rojo); border-color: var(--rojo); }
+  .accion-peligro svg { color: var(--rojo); }
+}

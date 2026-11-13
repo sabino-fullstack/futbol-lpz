@@ -27,6 +27,7 @@ import CampanaAvisos from './CampanaAvisos'
 import Avisos from './Avisos'
 import { sincronizarPush } from './push'
 import Configuracion from './Configuracion'
+import Bienvenida from './Bienvenida'
 
 function ScrollArriba() {
   const { pathname } = useLocation()
@@ -35,6 +36,7 @@ function ScrollArriba() {
 }
 
 function App() {
+  const [, setBienvenida] = useState(0)
   const { pathname } = useLocation()
   const [sesion, setSesion] = useState(null)
   const [cargando, setCargando] = useState(true)
@@ -42,7 +44,7 @@ function App() {
   const [esEncargado, setEsEncargado] = useState(false)
   const [verificado, setVerificado] = useState(false) // ya sabemos quién es y qué puede ver
   const [recarga, setRecarga] = useState(0)
-
+  
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSesion(data.session)
@@ -97,6 +99,13 @@ if (!verificado) return <Cargando pantalla />
   return <CambiarClave onListo={() => setRecarga((n) => n + 1)} />
 }
 
+let bienvenidaPendiente = false
+try {
+  bienvenidaPendiente = localStorage.getItem(`bienvenida:${usuarioId}`) === 'pendiente'
+} catch { /* sin almacenamiento */ }
+if (bienvenidaPendiente) {
+  return <Bienvenida perfil={perfil} onListo={() => setBienvenida((n) => n + 1)} />
+}
 
 
   const esSuperadmin = perfil?.rol === 'superadmin'

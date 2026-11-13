@@ -10,6 +10,7 @@ import Etiqueta from './EtiquetaEstado'
 import { WHATSAPP_AYUDA } from './contacto'
 import { nombreCompleto } from './formato'
 import { useVolver } from './navegacion'
+import { useGrupo } from './useGrupo'
 
 const TONOS = {
   verde: 'bg-verde/15 text-verde',
@@ -64,6 +65,7 @@ const numeroValido = /^591\d{8}$/.test(WHATSAPP_AYUDA)
 
 export default function Ayuda({ perfil }) {
   const volver = useVolver('/partidos')
+  const { enlace: grupo } = useGrupo()
 
   // Quien ya vio la ayuda no vuelve a ver la invitación de la lista
   useEffect(() => {
@@ -192,6 +194,16 @@ export default function Ayuda({ perfil }) {
           </p>
         </Pregunta>
       </section>
+
+{grupo && (
+  <section className="tarjeta space-y-3">
+    <h3 className="flex items-center gap-2"><Users size={20} className="text-verde" /> Grupo de WhatsApp</h3>
+    <p className="text-suave">Ahí se avisan los partidos de la semana y se resuelven las dudas.</p>
+    <a className="btn btn-primario" href={grupo} target="_blank" rel="noreferrer">
+      <MessageCircle size={20} /> Unirme al grupo
+    </a>
+  </section>
+)}
 
       <section className="tarjeta space-y-3">
         <h3>¿Necesitas ayuda?</h3>

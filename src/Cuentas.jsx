@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Copy, Check, KeyRound, MessageCircle } from 'lucide-react'
+import {
+  Ban, BadgeCheck, Check, Copy, KeyRound, MessageCircle, RotateCcw, Search, ShieldCheck,
+} from 'lucide-react'
 import { supabase } from './supabaseClient'
 import { normalizarNumero } from './auth'
 import { nombreCompleto, enlaceClaveTemporal } from './formato'
+import { Acciones, Accion } from './Acciones'
 import Rueda from './Rueda'
 
 const COLUMNAS =
@@ -14,6 +17,22 @@ async function mensajeDeError(error) {
     if (j?.error) return j.error
   } catch { /* sin detalle */ }
   return 'No se pudo restablecer la contraseña.'
+}
+
+const iniciales = (p) =>
+  [p.nombre, p.apellido].filter(Boolean).map((t) => t[0]).join('').toUpperCase().slice(0, 2) || '?'
+
+function Chip({ p }) {
+  const [texto, clase] = !p.activo
+    ? ['Suspendida', 'border-rojo/40 bg-rojo/10 text-rojo']
+    : p.rol === 'superadmin'
+      ? ['Superadmin', 'border-verde/40 bg-verde/10 text-verde']
+      : p.nivel === 'confiable'
+        ? ['Confiable', 'border-verde/40 bg-verde/10 text-verde']
+        : ['Cuenta nueva', 'border-borde bg-borde/40 text-suave']
+  return (
+    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold ${clase}`}>{texto}</span>
+  )
 }
 
 export default function Cuentas() {
@@ -136,9 +155,6 @@ export default function Cuentas() {
     }
   }
 
-  const etiqueta = (p) =>
-    p.rol === 'superadmin' ? 'Superadmin' : p.nivel === 'confiable' ? 'Confiable' : 'Cuenta nueva'
-
   return (
     <div className="space-y-3">
       {error && <p className="aviso aviso-error">{error}</p>}
@@ -149,42 +165,39 @@ export default function Cuentas() {
 
       {temporal && (
         <div className="tarjeta space-y-3 border-l-4 border-l-amarillo">
-          <p className="font-semibold">
-            Contraseña temporal de {nombreCompleto(temporal.perfil)}
-          </p>
+          <p className="font-semibold">Contraseña temporal de {nombreCompleto(temporal.perfil)}</p>
           <p className="select-all rounded-xl bg-borde/50 py-3 text-center font-display text-4xl font-bold tracking-widest">
             {temporal.clave}
           </p>
           <p className="text-sm text-suave">
             Se muestra una sola vez. Al entrar, la persona deberá crear una contraseña nueva.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <Acciones>
             {temporal.perfil.whatsapp && (
-              <a
-                className="btn btn-activo"
-                target="_blank"
-                rel="noreferrer"
+              <Accion
+                Icono={MessageCircle}
+                tono="activo"
+                texto="Enviar por WhatsApp"
                 href={enlaceClaveTemporal(temporal.perfil, temporal.clave)}
-              >
-                <MessageCircle size={16} /> Enviar por WhatsApp
-              </a>
+              />
             )}
-            <button onClick={copiar}>
-              {copiado ? <><Check size={16} /> Copiado</> : <><Copy size={16} /> Copiar</>}
-            </button>
-            <button onClick={() => setTemporal(null)}>Listo, ya la envié</button>
-          </div>
+            <Accion Icono={copiado ? Check : Copy} texto={copiado ? 'Copiado' : 'Copiar'} onClick={copiar} />
+            <Accion Icono={Check} texto="Ya la envié" onClick={() => setTemporal(null)} />
+          </Acciones>
         </div>
       )}
 
       <div className="flex gap-2">
-        <input
-          className="flex-1"
-          placeholder="Buscar por número, nombre o apodo"
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && buscar()}
-        />
+        <div className="relative min-w-0 flex-1">
+          <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-suave" />
+          <input
+            className="w-full pl-10"
+            placeholder="Buscar por número, nombre o apodo"
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && buscar()}
+          />
+        </div>
         <button onClick={buscar}>Buscar</button>
       </div>
       {texto.trim().length > 0 && texto.trim().length < 3 && (
@@ -192,67 +205,88 @@ export default function Cuentas() {
       )}
 
       {resultados.length === 0 && <p className="text-suave">No se encontraron cuentas.</p>}
+
       {resultados.map((p) => (
-        <div key={p.id} className="tarjeta space-y-1.5">
-          <p className="font-semibold">{nombreCompleto(p)}</p>
-          <p className="text-sm text-suave">
-            {p.whatsapp && (
-              <a href={`https://wa.me/${p.whatsapp}`} target="_blank" rel="noreferrer">{p.whatsapp}</a>
-            )}
-            {' · '}{etiqueta(p)}
-            {p.rechazos_seguidos >= 2 && ' · pagos rechazados'}
-          </p>
-          {!p.activo && <p className="text-rojo">Suspendida: {p.suspendido_motivo}</p>}
+        <div
+          key={p.id}
+          className={`tarjeta space-y-3 border-l-4 ${
+            !p.activo ? 'border-l-rojo' : p.en_revision || p.cambiar_clave ? 'border-l-amarillo' : 'border-l-borde'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-verde/15 font-display text-xl font-bold text-verde">
+              {iniciales(p)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold">{nombreCompleto(p)}</p>
+              {p.whatsapp && (
+                <a href={`https://wa.me/${p.whatsapp}`} target="_blank" rel="noreferrer" className="text-sm">
+                  {p.whatsapp}
+                </a>
+              )}
+            </div>
+            <Chip p={p} />
+          </div>
+
+          {!p.activo && <p className="text-sm text-rojo">Motivo: {p.suspendido_motivo}</p>}
           {p.activo && p.en_revision && (
-            <p className="text-amarillo-texto">En revisión: {p.revision_motivo}</p>
+            <p className="text-sm text-amarillo-texto">En revisión: {p.revision_motivo}</p>
+          )}
+          {p.activo && p.rechazos_seguidos >= 2 && (
+            <p className="text-sm text-amarillo-texto">Tiene pagos rechazados seguidos</p>
           )}
           {p.activo && p.cambiar_clave && (
             <p className="text-sm text-amarillo-texto">Tiene una contraseña temporal pendiente de cambiar</p>
           )}
-          <div className="flex flex-wrap gap-2 pt-1">
+
+          <Acciones>
             {p.activo && p.rol !== 'superadmin' && (
-              <button disabled={trabajando} onClick={() => restablecer(p)}>
-                <KeyRound size={16} /> Restablecer contraseña
-              </button>
-            )}
-            {p.activo && p.rol !== 'superadmin' && (
-              <button disabled={trabajando} onClick={() => suspender(p)}>Suspender</button>
-            )}
-            {!p.activo && (
-              <button disabled={trabajando} onClick={() => reactivar(p)}>Reactivar</button>
+              <Accion Icono={KeyRound} texto="Restablecer contraseña" disabled={trabajando} onClick={() => restablecer(p)} />
             )}
             {p.activo && p.rol !== 'superadmin' && p.nivel === 'nuevo' && (
-              <button disabled={trabajando} onClick={() => aprobar(p, true)}>Marcar confiable</button>
+              <Accion Icono={BadgeCheck} texto="Marcar confiable" disabled={trabajando} onClick={() => aprobar(p, true)} />
             )}
             {p.activo && (p.rechazos_seguidos >= 2 || p.en_revision) && (
-              <button disabled={trabajando} onClick={() => aprobar(p, false)}>Quitar restricciones</button>
+              <Accion Icono={ShieldCheck} texto="Quitar restricciones" disabled={trabajando} onClick={() => aprobar(p, false)} />
             )}
-          </div>
+            {!p.activo && (
+              <Accion Icono={RotateCcw} texto="Reactivar" disabled={trabajando} onClick={() => reactivar(p)} />
+            )}
+            {p.activo && p.rol !== 'superadmin' && (
+              <Accion Icono={Ban} tono="peligro" texto="Suspender" disabled={trabajando} onClick={() => suspender(p)} />
+            )}
+          </Acciones>
         </div>
       ))}
 
-      <h4 className="pt-2 font-bold">Números bloqueados</h4>
-      {bloqueados.length === 0 && <p className="text-suave">No hay números bloqueados.</p>}
-      {bloqueados.map((b) => (
-        <div key={b.numero} className="tarjeta flex items-center justify-between gap-2">
-          <div>
-            <p className="font-semibold">{b.numero}</p>
-            <p className="text-sm text-suave">{b.motivo}</p>
+      <section className="space-y-3 pt-2">
+        <h3>Números bloqueados</h3>
+        {bloqueados.length === 0 && <p className="text-suave">No hay números bloqueados.</p>}
+        {bloqueados.map((b) => (
+          <div key={b.numero} className="tarjeta flex items-center gap-3 border-l-4 border-l-rojo">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{b.numero}</p>
+              <p className="truncate text-sm text-suave">{b.motivo}</p>
+            </div>
+            <button disabled={trabajando} onClick={() => quitarBloqueo(b)}>
+              <RotateCcw size={16} /> Quitar
+            </button>
           </div>
-          <button disabled={trabajando} onClick={() => quitarBloqueo(b)}>Quitar bloqueo</button>
-        </div>
-      ))}
+        ))}
 
-      <div className="flex gap-2 pt-2">
-        <input
-          className="flex-1"
-          placeholder="Bloquear un número (sin cuenta aún)"
-          inputMode="numeric"
-          value={numeroNuevo}
-          onChange={(e) => setNumeroNuevo(e.target.value)}
-        />
-        <button disabled={trabajando} onClick={bloquearNumero}>Bloquear</button>
-      </div>
+        <div className="flex gap-2">
+          <input
+            className="min-w-0 flex-1"
+            placeholder="Bloquear un número (sin cuenta aún)"
+            inputMode="numeric"
+            value={numeroNuevo}
+            onChange={(e) => setNumeroNuevo(e.target.value)}
+          />
+          <button className="btn-peligro" disabled={trabajando} onClick={bloquearNumero}>
+            <Ban size={16} /> Bloquear
+          </button>
+        </div>
+      </section>
     </div>
   )
 }
