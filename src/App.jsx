@@ -144,6 +144,7 @@ if (!verificado) return <Cargando pantalla />
             <Route path="/reglas" element={<Reglas />} />
             <Route path="/perfil" element={<Perfil perfil={perfil} />} />
             <Route path="/ayuda" element={<Ayuda perfil={perfil} />} />
+            <Route path="/avisos" element={<Avisos />} />
             <Route path="/configuracion" element={<Configuracion perfil={perfil} />} />
             
 
