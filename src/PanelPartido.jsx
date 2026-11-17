@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ListaWhatsApp from './ListaWhatsapp'
 import { useSearchParams } from 'react-router'
 import {
   Banknote, Check, ChevronDown, ChevronLeft, Hand, MessageCircle, RefreshCw, RotateCcw,
@@ -12,6 +13,7 @@ import { claveCupo } from './estados'
 import {
   bs, nombreCompleto, enlaceDevolucion, inicioPartido, finPartido, sinTildes,
 } from './formato'
+
 
 const ETIQUETA_DEVOLUCION = {
   pendiente: 'Devolución pendiente',
@@ -480,6 +482,9 @@ export default function PanelPartido({ partidoId, perfilId, esSuperadmin, onVolv
               Tomar mi cupo bonificado
             </button>
           )}
+          {!restringido && partido.estado !== 'cancelado' && (
+  <ListaWhatsApp partido={partido} reservas={activas} pagoDe={pagoDe} />
+)}
 
           <Buscador valor={busqueda} onCambio={setBusqueda} placeholder="Buscar jugador por nombre o apodo" />
           <Filtros

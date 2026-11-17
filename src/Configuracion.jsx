@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, CalendarClock, CalendarPlus, Check, ChevronLeft, Megaphone, Settings, adgeCheck, Clock } from 'lucide-react'
+import { Bell, CalendarClock, CalendarPlus, Check, ChevronLeft, Megaphone, Settings, BadgeCheck, Clock } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import ActivarAvisos from './ActivarAvisos'
 import DiagnosticoPush from './DiagnosticoPush'
