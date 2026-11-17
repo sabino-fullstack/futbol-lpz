@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import {
   Bell, BellRing, CalendarClock, CalendarDays, CalendarPlus, CalendarX, ChevronLeft, ChevronRight,
-  Megaphone, Settings,
+  Megaphone, Settings, BadgeCheck, Banknote, Clock,
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import Cargando from './Cargando'
@@ -16,6 +16,9 @@ const ICONO = {
   partido_cambiado: CalendarClock,
   partidos_nuevos: CalendarPlus,
   aviso: Megaphone,
+  pago_confirmado: BadgeCheck,
+  pago_rechazado: Banknote,
+  recordatorio: Clock,
 }
 
 export default function Avisos() {

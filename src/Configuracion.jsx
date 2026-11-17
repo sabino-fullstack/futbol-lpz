@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, CalendarClock, CalendarPlus, Check, ChevronLeft, Megaphone, Settings } from 'lucide-react'
+import { Bell, CalendarClock, CalendarPlus, Check, ChevronLeft, Megaphone, Settings, adgeCheck, Clock } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import ActivarAvisos from './ActivarAvisos'
 import DiagnosticoPush from './DiagnosticoPush'
@@ -8,6 +8,8 @@ import Cargando from './Cargando'
 import { useVolver } from './navegacion'
 
 const OPCIONES = [
+  ['pagos', 'Mis pagos', 'Cuando el encargado confirma o rechaza un pago tuyo.', BadgeCheck],
+  ['recordatorios', 'Recordatorios', 'Unas horas antes de un partido en el que tienes cupo.', Clock],
   ['cambios', 'Cambios y cancelaciones', 'Si cambia la hora o se cancela un partido en el que tienes cupo.', CalendarClock],
   ['nuevos_partidos', 'Partidos nuevos', 'Cuando se habilitan los partidos de la semana.', CalendarPlus],
   ['organizador', 'Mensajes del organizador', 'Avisos importantes sobre los partidos o el grupo.', Megaphone],
@@ -34,12 +36,12 @@ export default function Configuracion({ perfil }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    supabase.from('preferencias_avisos')
-      .select('cambios, nuevos_partidos, organizador').maybeSingle()
-      .then(({ data, error }) => {
-        if (error) return setError(error.message)
-        setPrefs(data ?? { cambios: true, nuevos_partidos: true, organizador: true })
-      })
+supabase.from('preferencias_avisos')
+  .select('cambios, nuevos_partidos, organizador, pagos, recordatorios').maybeSingle()
+  .then(({ data, error }) => {
+    if (error) return setError(error.message)
+    setPrefs(data ?? { cambios: true, nuevos_partidos: true, organizador: true, pagos: true, recordatorios: true })
+  })
   }, [])
 
   async function cambiar(clave, valor) {
@@ -47,11 +49,13 @@ export default function Configuracion({ perfil }) {
     const antes = prefs
     const nuevas = { ...prefs, [clave]: valor }
     setPrefs(nuevas)
-    const { error } = await supabase.rpc('guardar_preferencias_avisos', {
-      p_cambios: nuevas.cambios,
-      p_nuevos: nuevas.nuevos_partidos,
-      p_organizador: nuevas.organizador,
-    })
+const { error } = await supabase.rpc('guardar_preferencias_avisos', {
+  p_cambios: nuevas.cambios,
+  p_nuevos: nuevas.nuevos_partidos,
+  p_organizador: nuevas.organizador,
+  p_pagos: nuevas.pagos,
+  p_recordatorios: nuevas.recordatorios,
+})
     if (error) {
       setPrefs(antes)
       setError(error.message)
